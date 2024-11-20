@@ -5,8 +5,8 @@ mod chess;
 
 fn main() {
     //println!("♔ 	♕ 	♖ 	♗ 	♘ 	♙ 	♚ 	♛ 	♜ 	♝ 	♞ 	♟ ");
-   let board = Board::new();
-   Board::play(&board);
+   let mut board = Board::new();
+   Board::play(&mut board);
    
 }
 
@@ -14,5 +14,5 @@ fn main() {
 
 #[derive(Parser, Debug)]
 struct Args {
-    //your chess move
+
 }

@@ -1,10 +1,14 @@
 use std::fmt;
+use std::iter::Map;
 use regex::Regex;
 use std::io;
 use std::io::Write;
+use std::str::FromStr;
+use std::collections::HashMap;
 
 enum TYPE {
-    PAWN,
+    //true if untouched and therefore can move 2 squares
+    PAWN(bool),
     BISHOP,
     KNIGHT,
     ROOK,
@@ -23,7 +27,7 @@ impl fmt::Display for PIECE {
         
         let s = match &self {
             PIECE::WHITE(t) => match t {
-                TYPE::PAWN => "♟",
+                TYPE::PAWN(_) => "♟",
                 TYPE::BISHOP => "♝",
                 TYPE::KNIGHT => "♞",
                 TYPE::ROOK => "♜",
@@ -31,7 +35,7 @@ impl fmt::Display for PIECE {
                 TYPE::KING => "♚",
             },
             PIECE::BLACK(t) => match t {
-                TYPE::PAWN => "♙",
+                TYPE::PAWN(_) => "♙",
                 TYPE::BISHOP => "♗",
                 TYPE::KNIGHT => "♘",
                 TYPE::ROOK => "♖",
@@ -49,6 +53,11 @@ impl fmt::Display for PIECE {
 pub struct Board {
     pieces: Vec<Vec<Option<PIECE>>>,
 }
+
+/*
+pub struct Board2 {
+    map: HashMap<Option<PIECE>>
+} */
 
 impl Board {
     pub fn new() -> Board {
@@ -68,7 +77,7 @@ impl Board {
         pieces.push(row1);
         let mut row2: Vec<Option<PIECE>> = Vec::new();
         for _ in 0..8 {
-            row2.push(Some(PIECE::WHITE(TYPE::PAWN)));
+            row2.push(Some(PIECE::WHITE(TYPE::PAWN(true))));
         }
         pieces.push(row2);
 
@@ -82,7 +91,7 @@ impl Board {
         }
         let mut row7: Vec<Option<PIECE>> = Vec::new();
         for _ in 0..8 {
-            row7.push(Some(PIECE::BLACK(TYPE::PAWN)));
+            row7.push(Some(PIECE::BLACK(TYPE::PAWN(true))));
         }
         pieces.push(row7);
         let mut row8: Vec<Option<PIECE>> = Vec::new();
@@ -103,9 +112,9 @@ impl Board {
 
 
 impl Board {
-    fn print(board: &Self) {
+    fn print(&self) {
         //unroll 2d vector into a 1d vector of strs
-        let v: Vec<String> = board.pieces.iter().flatten()
+        let v: Vec<String> = self.pieces.iter().flatten()
         .map(|opt| match opt {
             Some(piece) => format!("{}", piece),
             None => " ".to_string(),
@@ -157,12 +166,12 @@ impl Board {
         println!("  #################################################");
     }
 
-    pub fn play(board: &Self) {
+    pub fn play(&mut self) {
 
         let mut usr_input = String::new();
         //let args = Args::parse();
         
-        Self::print(&board);
+        Self::print(&self);
 
         while usr_input != "q" {
             usr_input.clear();
@@ -173,7 +182,12 @@ impl Board {
             usr_input = usr_input.strip_suffix("\r\n").or(usr_input.strip_suffix("\n")).unwrap_or(&usr_input).to_string();
             
             match validate_input(&usr_input) {
-                Ok(usr_input) => println!("you moved: {}", usr_input),
+                Ok(usr_input) => {
+                    let move_type: MoveType = parse_input(&usr_input).unwrap();
+                    self.update_board(move_type).unwrap();
+                    println!("success!");
+                    self.print();
+                },
                 Err(err) => println!("error! {}", err),
             }
             
@@ -184,10 +198,65 @@ impl Board {
         }
         println!("Exiting program...");
     }
+
+    // update the board with applied move
+    pub fn update_board(&mut self, move_type: MoveType) -> Result<(), ()> {
+        // special case: if rank 4 then do this. else do what's below for e5.
+        // e4 empty?
+        // e3 not empty? contains white pawn? => e3 -> e4, contains Some(PIECE) => invalid
+        // e2 contains white pawn(never moved = true)? => e3 -> e4
+        match move_type {
+            MoveType::PawnPush((rank, file)) => {
+                return self.pawn_push(rank, file);
+            },
+            _ => return Err(())
+        };
+    }
+
+    pub fn pawn_push(&mut self, rank: usize, file: usize) -> Result<(), ()>{
+         // if piece is occupied
+         if let Some(piece) = &self.pieces[rank][file]{
+            println!("space occupied...");
+            Err(())
+        } else {
+            // if there is a piece 1 rank below
+            if let Some(piece) = &self.pieces[rank - 1][file] {
+                match piece {
+                    //if it's a pawn
+                    PIECE::WHITE(TYPE::PAWN(_)) => {
+                        self.pieces[rank - 1][file] = None;
+                        self.pieces[rank][file] = Some(PIECE::WHITE(TYPE::PAWN(false)));
+                        return Ok(())
+                    },
+                    // if it's anything else
+                    
+                    _ => {println!("occupied below"); return Err(())}
+                }
+            }
+            // if there's a piece 2 ranks below
+            if let Some(piece) = &self.pieces[rank - 2][file] {
+                match piece {
+
+                    PIECE::WHITE(TYPE::PAWN(can_double_move)) => {
+                        if *can_double_move {
+                            self.pieces[rank - 2][file] = None;
+                            self.pieces[rank][file] = Some(PIECE::WHITE(TYPE::PAWN(false)));
+                            return Ok(())
+                        } else {
+                            return Err(())
+                        }
+                    },
+                    // is any other piece
+                    _ => return Err(())
+                }
+            }
+            Err(())
+        }
+    }
 }
 
 
-fn validate_input(usr_input: &str) -> Result<&str, &str>{
+pub fn validate_input(usr_input: &str) -> Result<&str, &str>{
     //regex credit https://8bitclassroom.com/2020/08/16/chess-in-regex/
     let input = usr_input.to_owned() + " ";
     let re = Regex::new(
@@ -201,11 +270,74 @@ fn validate_input(usr_input: &str) -> Result<&str, &str>{
     Ok(usr_input)
 }
 
-fn parse_input(usr_input: &str) -> Result<&str, &str> {
+pub fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
     /*4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 d6 8.c3 O-O 9.h3 Nb8 10.d4 Nbd7
 11.c4 c6 12.cxb5 axb5 13.Nc3 Bb7 14.Bg5 b4 15.Nb1 h6 16.Bh4 c5 17.dxe5
 Nxe4 18.Bxe7 Qxe7 19.exd6 Qf6 20.Nbd2 Nxd6 21.Nc4 Nxc4 22.Bxc4 Nb6
 23.Ne5 Rae8 24.Bxf7+ Rxf7 25.Nxf7 Rxe1+ 26.Qxe1 Kxf7 27.Qe3 Qg5 28.Qxg5
 hxg5 29.b3 Ke6 30.a3 Kd6 31.axb4 cxb4 32.Ra5 Nd5 33.f3 Bc8 34.Kf2 Bf5
 35.Ra7 g6 36.Ra6+ Kc5 37.Ke1 Nf4 38.g3 Nxh3 39.Kd2 Kb5 40.Rd6 Kc5 41.Ra6*/
+    // trim spaces etc
+    // castle?
+    // pawn move? 2 chars
+    // other piece move? 3 or 4 chars
+    // capture?
+
+    // pawn push
+    if usr_input.len() == 2 {
+        let mut it = usr_input.chars();
+        Ok(MoveType::PawnPush(coordinate_to_index(&it.next().unwrap().to_string(), &it.next().unwrap().to_string())))
+    }
+    // capture
+    else if usr_input.contains("x") {
+
+    }
+
+    else {
+        Err(ParseMoveError)
+    }
+
+}
+
+
+
+enum MoveType {
+    PawnPush((usize, usize)),
+    Normal(Move),
+    Capture(Move),
+    ShortCastle,
+    LongCastle,
+}
+//no support for castling or en passant yet
+struct Move {
+    // (file, rank) eg. (e, 4)
+    coordinate: (usize, usize),
+    //does it specify a type? if none it's a pawn
+    piece: PIECE,
+    // exd5 has file qualifier of "e"
+    file_qualifier: Option<String>,
+}
+#[derive(Debug)]
+struct ParseMoveError;
+
+
+// chess coordinate to 2d vector index. NOTE: origin is bottom-left like a chess bboard
+fn coordinate_to_index(file: &str, rank: &str) -> (usize, usize) {
+    // a, b, c -> 0, 1, 2
+    // 1, 2, 3 -> 0, 1, 2
+    let y: usize = match file {
+        "a" => 0,
+        "b" => 1,
+        "c" => 2,
+        "d" => 3,
+        "e" => 4,
+        "f" => 5,
+        "g" => 6,
+        "h" => 7,
+        _ => panic!(),
+    };
+
+    let x: usize = rank.parse::<usize>().unwrap() - 1;
+
+    (x, y)
 }
