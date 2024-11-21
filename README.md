@@ -1,6 +1,8 @@
 
 # Chess in your terminal!
 
+work in progress!
+
 ## **Ideas**
 
 - save session data to pick up where you left off
