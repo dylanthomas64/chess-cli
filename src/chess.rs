@@ -30,10 +30,16 @@ enum PIECE {
 }
 
 #[derive(Debug)]
-struct ParsePieceError;
+pub enum Error {
+    ParsePieceError,
+    InvalidInputError,
+    MovementError,
+    CaptureError,
+    BoardUpdateError,
+}
 
 impl FromStr for TYPE {
-    type Err = ParsePieceError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "B" => Ok(TYPE::BISHOP),
@@ -41,7 +47,7 @@ impl FromStr for TYPE {
             "R" => Ok(TYPE::ROOK),
             "Q" => Ok(TYPE::QUEEN),
             "K" => Ok(TYPE::KING),
-            _ => Err(ParsePieceError),
+            _ => Err(Error::ParsePieceError),
         }
     }
 }
@@ -211,7 +217,7 @@ impl Board {
         println!("  #################################################");
     }
 
-    pub fn play_move(&mut self, player: &PLAYER, usr_input: &str) -> Result<(), ()> {
+    pub fn play_move(&mut self, player: &PLAYER, usr_input: &str) -> Result<(), Error> {
         match validate_input(&usr_input) {
             Ok(usr_input) => {
                 let move_type: MoveType = parse_input(&usr_input).unwrap();
@@ -219,14 +225,14 @@ impl Board {
                 self.print();
                 Ok(())
             }
-            Err(err) => Err(()),
+            Err(err) => Err(err),
         }
 
         //assert_ne!(usr_input, "q");
     }
 
     // update the board with applied move
-    fn update_board(&mut self, move_type: MoveType, player: &PLAYER) -> Result<(), ()> {
+    fn update_board(&mut self, move_type: MoveType, player: &PLAYER) -> Result<(), Error> {
         // special case: if rank 4 then do this. else do what's below for e5.
         // e4 empty?
         // e3 not empty? contains white pawn? => e3 -> e4, contains Some(PIECE) => invalid
@@ -234,15 +240,15 @@ impl Board {
         match move_type {
             MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
             MoveType::Capture(move_struct) => self.capture(move_struct, player),
-            _ => Err(()),
+            _ => Err(Error::BoardUpdateError),
         }
     }
 
-    fn pawn_push(&mut self, rank: usize, file: usize, player: &PLAYER) -> Result<(), ()> {
+    fn pawn_push(&mut self, rank: usize, file: usize, player: &PLAYER) -> Result<(), Error> {
         // if piece is occupied
         if let Some(_) = &self.pieces[rank][file] {
             println!("space occupied...");
-            Err(())
+            Err(Error::MovementError)
         } else {
             match player {
                 // WHITE TO MOVE
@@ -259,7 +265,7 @@ impl Board {
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(());
+                                return Err(Error::MovementError);
                             }
                         }
                     }
@@ -272,11 +278,11 @@ impl Board {
                                     self.pieces[rank][file] = Some(PIECE::WHITE(TYPE::PAWN(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(());
+                                    return Err(Error::MovementError);
                                 }
                             }
                             // is any other piece
-                            _ => return Err(()),
+                            _ => return Err(Error::MovementError),
                         }
                     }
                 }
@@ -294,7 +300,7 @@ impl Board {
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(());
+                                return Err(Error::MovementError);
                             }
                         }
                     }
@@ -307,21 +313,21 @@ impl Board {
                                     self.pieces[rank][file] = Some(PIECE::BLACK(TYPE::PAWN(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(());
+                                    return Err(Error::MovementError);
                                 }
                             }
                             // is any other piece
-                            _ => return Err(()),
+                            _ => return Err(Error::MovementError),
                         }
                     }
                 }
             }
 
-            Err(())
+            Err(Error::MovementError)
         }
     }
 
-    fn capture(&mut self, move_struct: Move, player: &PLAYER) -> Result<(), ()> {
+    fn capture(&mut self, move_struct: Move, player: &PLAYER) -> Result<(), Error> {
         match move_struct.piece_type {
             TYPE::PAWN(_) => {
                 let (rank, file) = move_struct.coordinate;
@@ -341,10 +347,10 @@ impl Board {
                                 self.pieces[rank - 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(())
+                                Err(Error::CaptureError)
                             }
                         } else {
-                            Err(())
+                            Err(Error::CaptureError)
                         }
                     }
                     PLAYER::BLACK => {
@@ -361,10 +367,10 @@ impl Board {
                                 self.pieces[rank + 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(())
+                                Err(Error::MovementError)
                             }
                         } else {
-                            Err(())
+                            Err(Error::MovementError)
                         }
                     }
                 }
@@ -375,7 +381,7 @@ impl Board {
 }
 
 // checks that input is valid using regex
-fn validate_input(usr_input: &str) -> Result<&str, &str> {
+fn validate_input(usr_input: &str) -> Result<&str, Error> {
     // regex help credit https://8bitclassroom.com/2020/08/16/chess-in-regex/
     let input = usr_input.to_owned() + " ";
     let re = Regex::new(
@@ -384,7 +390,7 @@ fn validate_input(usr_input: &str) -> Result<&str, &str> {
     .unwrap();
     assert!(re.is_match("d4 "));
     let Some(caps) = re.captures(&input) else {
-        return Err("not a valid input");
+        return Err(Error::InvalidInputError);
     };
     println!("captured: {:?}", caps);
     Ok(usr_input)

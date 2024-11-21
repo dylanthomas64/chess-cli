@@ -25,21 +25,24 @@ fn main() {
     // main loop
     loop {
         // white turn
-        if let Ok(usr_input) = get_usr_input(&white) {
-            if let Err(_) = board.play_move(&white, &usr_input) {
-                continue;
-            }
-        } else {
-            continue;
+        match  get_usr_input(&white) {
+            Ok(usr_input) => {
+                if let Err(err) = board.play_move(&white, &usr_input) {
+                    eprintln!("{:?}", err);
+                    continue;
+                }
+            },
+            Err(err) => {eprintln!("{:?}", err); continue},
         }
 
-        // black turn
-        if let Ok(usr_input) = get_usr_input(&black) {
-            if let Err(_) = board.play_move(&black, &usr_input) {
-                continue;
-            }
-        } else {
-            continue;
+        match  get_usr_input(&white) {
+            Ok(usr_input) => {
+                if let Err(err) = board.play_move(&white, &usr_input) {
+                    eprintln!("{:?}", err);
+                    continue;
+                }
+            },
+            Err(err) => {eprintln!("{:?}", err); continue},
         }
     }
     println!("Exiting program...");
