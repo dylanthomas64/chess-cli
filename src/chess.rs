@@ -6,6 +6,13 @@ use std::io::Write;
 use std::iter::Map;
 use std::str::FromStr;
 
+
+pub enum PLAYER {
+    WHITE,
+    BLACK,
+}
+
+
 #[derive(Debug, Clone)]
 enum TYPE {
     //true if untouched and therefore can move 2 squares
@@ -125,7 +132,7 @@ impl Board {
 }
 
 impl Board {
-    fn print(&self) {
+    pub fn print(&self) {
         //unroll 2d vector into a 1d vector of strs
         let v: Vec<String> = self
             .pieces
@@ -206,61 +213,46 @@ impl Board {
         println!("  #################################################");
     }
 
-    pub fn play(&mut self) {
-        let mut usr_input = String::new();
-        //let args = Args::parse();
+    pub fn play_move(&mut self, player: &PLAYER, usr_input: &str) {
 
-        Self::print(&self);
+        
 
-        while usr_input != "q" {
-            usr_input.clear();
-            println!("Your move: ");
-
-            io::stdout().flush().expect("Cannot flush stdout");
-            io::stdin()
-                .read_line(&mut usr_input)
-                .expect("failed to read user input");
-            usr_input = usr_input
-                .strip_suffix("\r\n")
-                .or(usr_input.strip_suffix("\n"))
-                .unwrap_or(&usr_input)
-                .to_string();
-
-            match validate_input(&usr_input) {
-                Ok(usr_input) => {
-                    let move_type: MoveType = parse_input(&usr_input).unwrap();
-                    self.update_board(move_type).unwrap();
-                    println!("success!");
-                    self.print();
-                }
-                Err(err) => println!("error! {}", err),
+        match validate_input(&usr_input) {
+            Ok(usr_input) => {
+                let move_type: MoveType = parse_input(&usr_input).unwrap();
+                self.update_board(move_type, player).unwrap();
+                self.print();
             }
+            Err(err) => println!("error! {}", err),
+        }
 
             //assert_ne!(usr_input, "q");
-        }
-        println!("Exiting program...");
+        
     }
 
     // update the board with applied move
-    pub fn update_board(&mut self, move_type: MoveType) -> Result<(), ()> {
+    fn update_board(&mut self, move_type: MoveType, player: &PLAYER) -> Result<(), ()> {
         // special case: if rank 4 then do this. else do what's below for e5.
         // e4 empty?
         // e3 not empty? contains white pawn? => e3 -> e4, contains Some(PIECE) => invalid
         // e2 contains white pawn(never moved = true)? => e3 -> e4
         match move_type {
-            MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file),
+            MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
             MoveType::Capture(move_struct) => self.capture(move_struct),
             _ => Err(()),
         }
     }
 
-    pub fn pawn_push(&mut self, rank: usize, file: usize) -> Result<(), ()> {
+    fn pawn_push(&mut self, rank: usize, file: usize, player: &PLAYER) -> Result<(), ()> {
         // if piece is occupied
-        if let Some(piece) = &self.pieces[rank][file] {
+        if let Some(_) = &self.pieces[rank][file] {
             println!("space occupied...");
             Err(())
         } else {
-            // if there is a piece 1 rank below
+            match player {
+                // WHITE TO MOVE
+                PLAYER::WHITE => {
+                    // if there is a piece 1 rank below
             if let Some(piece) = &self.pieces[rank - 1][file] {
                 match piece {
                     //if it's a pawn
@@ -276,8 +268,8 @@ impl Board {
                     }
                 }
             }
-            // if there's a piece 2 ranks below
-            if let Some(piece) = &self.pieces[rank - 2][file] {
+            // square below is clear, now check if there's a piece 2 ranks below
+            else if let Some(piece) = &self.pieces[rank - 2][file] {
                 match piece {
                     PIECE::WHITE(TYPE::PAWN(can_double_move)) => {
                         if *can_double_move {
@@ -292,11 +284,18 @@ impl Board {
                     _ => todo!(),
                 }
             }
+                },
+                // BLACK TO MOVE
+                PLAYER::BLACK => {
+                    todo!()
+                },
+            }
+            
             Err(())
         }
     }
 
-    pub fn capture(&mut self, move_struct: Move) -> Result<(), ()> {
+    fn capture(&mut self, move_struct: Move) -> Result<(), ()> {
         match move_struct.piece {
             PIECE::WHITE(TYPE::PAWN(_)) => {
                 let (rank, file) = move_struct.coordinate;
@@ -322,7 +321,7 @@ impl Board {
     }
 }
 
-pub fn validate_input(usr_input: &str) -> Result<&str, &str> {
+fn validate_input(usr_input: &str) -> Result<&str, &str> {
     //regex credit https://8bitclassroom.com/2020/08/16/chess-in-regex/
     let input = usr_input.to_owned() + " ";
     let re = Regex::new(
@@ -337,18 +336,13 @@ pub fn validate_input(usr_input: &str) -> Result<&str, &str> {
     Ok(usr_input)
 }
 
-pub fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
+fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
     /*4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 d6 8.c3 O-O 9.h3 Nb8 10.d4 Nbd7
     11.c4 c6 12.cxb5 axb5 13.Nc3 Bb7 14.Bg5 b4 15.Nb1 h6 16.Bh4 c5 17.dxe5
     Nxe4 18.Bxe7 Qxe7 19.exd6 Qf6 20.Nbd2 Nxd6 21.Nc4 Nxc4 22.Bxc4 Nb6
     23.Ne5 Rae8 24.Bxf7+ Rxf7 25.Nxf7 Rxe1+ 26.Qxe1 Kxf7 27.Qe3 Qg5 28.Qxg5
     hxg5 29.b3 Ke6 30.a3 Kd6 31.axb4 cxb4 32.Ra5 Nd5 33.f3 Bc8 34.Kf2 Bf5
     35.Ra7 g6 36.Ra6+ Kc5 37.Ke1 Nf4 38.g3 Nxh3 39.Kd2 Kb5 40.Rd6 Kc5 41.Ra6*/
-    // trim spaces etc
-    // castle?
-    // pawn move? 2 chars
-    // other piece move? 3 or 4 chars
-    // capture?
 
     // pawn push
     if usr_input.len() == 2 {
@@ -421,7 +415,7 @@ enum MoveType {
 struct Move {
     // (file, rank) eg. (e, 4)
     coordinate: (usize, usize),
-    //does it specify a type? if none it's a pawn
+
     piece: PIECE,
     // exd5 has file qualifier of "e"
     file_qualifier: Option<String>,
