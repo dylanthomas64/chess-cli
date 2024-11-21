@@ -1,4 +1,4 @@
-use chess::{Board, PLAYER};
+use chess::{Board, Player};
 use clap::Parser;
 use std::io;
 use std::io::Write;
@@ -8,8 +8,8 @@ mod chess;
 fn main() {
     //println!("♔ 	♕ 	♖ 	♗ 	♘ 	♙ 	♚ 	♛ 	♜ 	♝ 	♞ 	♟ ");
     let mut board = Board::new();
-    let white = PLAYER::WHITE;
-    let black = PLAYER::BLACK;
+    let white = Player::White;
+    let black = Player::Black;
 
     /* loop {
                 loop {get user white input -> if good play move -> if err continue, else break}
@@ -25,36 +25,49 @@ fn main() {
     // main loop
     loop {
         // white turn
-        match  get_usr_input(&white) {
+        match get_usr_input(&white) {
             Ok(usr_input) => {
+                if usr_input == "q" {
+                    break;
+                };
                 if let Err(err) = board.play_move(&white, &usr_input) {
                     eprintln!("{:?}", err);
                     continue;
                 }
-            },
-            Err(err) => {eprintln!("{:?}", err); continue},
+            }
+            Err(err) => {
+                eprintln!("{:?}", err);
+                continue;
+            }
         }
 
-        match  get_usr_input(&white) {
+        // black turn
+        match get_usr_input(&black) {
             Ok(usr_input) => {
-                if let Err(err) = board.play_move(&white, &usr_input) {
+                if usr_input == "q" {
+                    break;
+                };
+                if let Err(err) = board.play_move(&black, &usr_input) {
                     eprintln!("{:?}", err);
                     continue;
                 }
-            },
-            Err(err) => {eprintln!("{:?}", err); continue},
+            }
+            Err(err) => {
+                eprintln!("{:?}", err);
+                continue;
+            }
         }
     }
     println!("Exiting program...");
 }
 
-fn get_usr_input(player: &PLAYER) -> Result<String, std::io::Error> {
+fn get_usr_input(player: &Player) -> Result<String, std::io::Error> {
     let mut usr_input = String::new();
     match player {
-        PLAYER::WHITE => {
+        Player::White => {
             println!("White to move: ");
         }
-        PLAYER::BLACK => {
+        Player::Black => {
             println!("Black to move: ");
         }
     }

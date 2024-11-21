@@ -1,75 +1,71 @@
 use regex::Regex;
-use std::collections::HashMap;
 use std::fmt;
-use std::io;
-use std::io::Write;
-use std::iter::Map;
 use std::str::FromStr;
 
-pub enum PLAYER {
-    WHITE,
-    BLACK,
+pub enum Player {
+    White,
+    Black,
 }
 
 #[derive(Debug, Clone)]
-enum TYPE {
+enum Type {
     // has moved: bool
-    PAWN(bool),
-    BISHOP,
-    KNIGHT,
-    ROOK,
-    QUEEN,
-    KING,
+    Pawn(bool),
+    Bishop,
+    Knight,
+    Rook,
+    Queen,
+    King,
 }
 
 //piece defined by colour and type
 #[derive(Debug, Clone)]
-enum PIECE {
-    BLACK(TYPE),
-    WHITE(TYPE),
+enum Piece {
+    Black(Type),
+    White(Type),
 }
 
 #[derive(Debug)]
 pub enum Error {
-    ParsePieceError,
-    InvalidInputError,
-    MovementError,
-    CaptureError,
-    BoardUpdateError,
+    ParsePiece,
+    InvalidInput,
+    Movement,
+    Capture,
+    BoardUpdate,
 }
 
-impl FromStr for TYPE {
+impl FromStr for Type {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "B" => Ok(TYPE::BISHOP),
-            "N" => Ok(TYPE::KNIGHT),
-            "R" => Ok(TYPE::ROOK),
-            "Q" => Ok(TYPE::QUEEN),
-            "K" => Ok(TYPE::KING),
-            _ => Err(Error::ParsePieceError),
+            "B" => Ok(Type::Bishop),
+            "N" => Ok(Type::Knight),
+            "R" => Ok(Type::Rook),
+            "Q" => Ok(Type::Queen),
+            "K" => Ok(Type::King),
+            _ => Err(Error::ParsePiece),
         }
     }
 }
 
-impl fmt::Display for PIECE {
+impl fmt::Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match &self {
-            PIECE::WHITE(t) => match t {
-                TYPE::PAWN(_) => "♟",
-                TYPE::BISHOP => "♝",
-                TYPE::KNIGHT => "♞",
-                TYPE::ROOK => "♜",
-                TYPE::QUEEN => "♛",
-                TYPE::KING => "♚",
+            Piece::White(t) => match t {
+                Type::Pawn(_) => "♟",
+                Type::Bishop => "♝",
+                Type::Knight => "♞",
+                Type::Rook => "♜",
+                Type::Queen => "♛",
+                Type::King => "♚",
             },
-            PIECE::BLACK(t) => match t {
-                TYPE::PAWN(_) => "♙",
-                TYPE::BISHOP => "♗",
-                TYPE::KNIGHT => "♘",
-                TYPE::ROOK => "♖",
-                TYPE::QUEEN => "♕",
-                TYPE::KING => "♔",
+            Piece::Black(t) => match t {
+                Type::Pawn(_) => "♙",
+                Type::Bishop => "♗",
+                Type::Knight => "♘",
+                Type::Rook => "♖",
+                Type::Queen => "♕",
+                Type::King => "♔",
             },
         };
         write!(f, "{}", s)
@@ -79,57 +75,58 @@ impl fmt::Display for PIECE {
 //2d vector representation of the board
 
 pub struct Board {
-    pieces: Vec<Vec<Option<PIECE>>>,
+    pieces: Vec<Vec<Option<Piece>>>,
 }
 
 /*
 pub struct Board2 {
-    map: HashMap<Option<PIECE>>
+    map: HashMap<Option<Piece>>
 } */
 
 impl Board {
     pub fn new() -> Board {
-        let mut pieces: Vec<Vec<Option<PIECE>>> = Vec::new();
+        let mut pieces: Vec<Vec<Option<Piece>>> = Vec::new();
         // generate inital board state
         // start pushing from the bottom (white first so indexing will translate easily to board coordinates)
-
-        let mut row1: Vec<Option<PIECE>> = Vec::new();
-        row1.push(Some(PIECE::WHITE(TYPE::ROOK)));
-        row1.push(Some(PIECE::WHITE(TYPE::KNIGHT)));
-        row1.push(Some(PIECE::WHITE(TYPE::BISHOP)));
-        row1.push(Some(PIECE::WHITE(TYPE::QUEEN)));
-        row1.push(Some(PIECE::WHITE(TYPE::KING)));
-        row1.push(Some(PIECE::WHITE(TYPE::BISHOP)));
-        row1.push(Some(PIECE::WHITE(TYPE::KNIGHT)));
-        row1.push(Some(PIECE::WHITE(TYPE::ROOK)));
+        let row1: Vec<Option<Piece>> = vec![
+            Some(Piece::White(Type::Rook)),
+            Some(Piece::White(Type::Knight)),
+            Some(Piece::White(Type::Bishop)),
+            Some(Piece::White(Type::Queen)),
+            Some(Piece::White(Type::King)),
+            Some(Piece::White(Type::Bishop)),
+            Some(Piece::White(Type::Knight)),
+            Some(Piece::White(Type::Rook)),
+        ];
         pieces.push(row1);
-        let mut row2: Vec<Option<PIECE>> = Vec::new();
+        let mut row2: Vec<Option<Piece>> = Vec::new();
         for _ in 0..8 {
-            row2.push(Some(PIECE::WHITE(TYPE::PAWN(true))));
+            row2.push(Some(Piece::White(Type::Pawn(true))));
         }
         pieces.push(row2);
 
         for _ in 0..4 {
-            let mut empty_row: Vec<Option<PIECE>> = Vec::new();
+            let mut empty_row: Vec<Option<Piece>> = Vec::new();
             for _ in 0..8 {
                 empty_row.push(None);
             }
             pieces.push(empty_row);
         }
-        let mut row7: Vec<Option<PIECE>> = Vec::new();
+        let mut row7: Vec<Option<Piece>> = Vec::new();
         for _ in 0..8 {
-            row7.push(Some(PIECE::BLACK(TYPE::PAWN(true))));
+            row7.push(Some(Piece::Black(Type::Pawn(true))));
         }
         pieces.push(row7);
-        let mut row8: Vec<Option<PIECE>> = Vec::new();
-        row8.push(Some(PIECE::BLACK(TYPE::ROOK)));
-        row8.push(Some(PIECE::BLACK(TYPE::KNIGHT)));
-        row8.push(Some(PIECE::BLACK(TYPE::BISHOP)));
-        row8.push(Some(PIECE::BLACK(TYPE::QUEEN)));
-        row8.push(Some(PIECE::BLACK(TYPE::KING)));
-        row8.push(Some(PIECE::BLACK(TYPE::BISHOP)));
-        row8.push(Some(PIECE::BLACK(TYPE::KNIGHT)));
-        row8.push(Some(PIECE::BLACK(TYPE::ROOK)));
+        let row8: Vec<Option<Piece>> = vec![
+            Some(Piece::Black(Type::Rook)),
+            Some(Piece::Black(Type::Knight)),
+            Some(Piece::Black(Type::Bishop)),
+            Some(Piece::Black(Type::Queen)),
+            Some(Piece::Black(Type::King)),
+            Some(Piece::Black(Type::Bishop)),
+            Some(Piece::Black(Type::Knight)),
+            Some(Piece::Black(Type::Rook)),
+        ];
         pieces.push(row8);
         Board { pieces }
     }
@@ -217,10 +214,10 @@ impl Board {
         println!("  #################################################");
     }
 
-    pub fn play_move(&mut self, player: &PLAYER, usr_input: &str) -> Result<(), Error> {
-        match validate_input(&usr_input) {
+    pub fn play_move(&mut self, player: &Player, usr_input: &str) -> Result<(), Error> {
+        match validate_input(usr_input) {
             Ok(usr_input) => {
-                let move_type: MoveType = parse_input(&usr_input).unwrap();
+                let move_type: MoveType = parse_input(usr_input).unwrap();
                 self.update_board(move_type, player)?;
                 self.print();
                 Ok(())
@@ -232,114 +229,114 @@ impl Board {
     }
 
     // update the board with applied move
-    fn update_board(&mut self, move_type: MoveType, player: &PLAYER) -> Result<(), Error> {
+    fn update_board(&mut self, move_type: MoveType, player: &Player) -> Result<(), Error> {
         // special case: if rank 4 then do this. else do what's below for e5.
         // e4 empty?
-        // e3 not empty? contains white pawn? => e3 -> e4, contains Some(PIECE) => invalid
+        // e3 not empty? contains white pawn? => e3 -> e4, contains Some(Piece) => invalid
         // e2 contains white pawn(never moved = true)? => e3 -> e4
         match move_type {
             MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
             MoveType::Capture(move_struct) => self.capture(move_struct, player),
-            _ => Err(Error::BoardUpdateError),
+            _ => Err(Error::BoardUpdate),
         }
     }
 
-    fn pawn_push(&mut self, rank: usize, file: usize, player: &PLAYER) -> Result<(), Error> {
+    fn pawn_push(&mut self, rank: usize, file: usize, player: &Player) -> Result<(), Error> {
         // if piece is occupied
-        if let Some(_) = &self.pieces[rank][file] {
+        if self.pieces[rank][file].is_some() {
             println!("space occupied...");
-            Err(Error::MovementError)
+            Err(Error::Movement)
         } else {
             match player {
-                // WHITE TO MOVE
-                PLAYER::WHITE => {
+                // White TO MOVE
+                Player::White => {
                     // if there is a piece 1 rank below
                     if let Some(piece) = &self.pieces[rank - 1][file] {
                         match piece {
                             //if it's a pawn
-                            PIECE::WHITE(TYPE::PAWN(_)) => {
+                            Piece::White(Type::Pawn(_)) => {
                                 self.pieces[rank - 1][file] = None;
-                                self.pieces[rank][file] = Some(PIECE::WHITE(TYPE::PAWN(false)));
+                                self.pieces[rank][file] = Some(Piece::White(Type::Pawn(false)));
                                 return Ok(());
                             }
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(Error::MovementError);
+                                return Err(Error::Movement);
                             }
                         }
                     }
                     // square below is clear, now check if there's a piece 2 ranks below
                     else if let Some(piece) = &self.pieces[rank - 2][file] {
                         match piece {
-                            PIECE::WHITE(TYPE::PAWN(can_double_move)) => {
+                            Piece::White(Type::Pawn(can_double_move)) => {
                                 if *can_double_move {
                                     self.pieces[rank - 2][file] = None;
-                                    self.pieces[rank][file] = Some(PIECE::WHITE(TYPE::PAWN(false)));
+                                    self.pieces[rank][file] = Some(Piece::White(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::MovementError);
+                                    return Err(Error::Movement);
                                 }
                             }
                             // is any other piece
-                            _ => return Err(Error::MovementError),
+                            _ => return Err(Error::Movement),
                         }
                     }
                 }
-                // BLACK TO MOVE
-                PLAYER::BLACK => {
+                // Black TO MOVE
+                Player::Black => {
                     // if there is a piece 1 rank ABOVE
                     if let Some(piece) = &self.pieces[rank + 1][file] {
                         match piece {
                             //if it's a pawn
-                            PIECE::BLACK(TYPE::PAWN(_)) => {
+                            Piece::Black(Type::Pawn(_)) => {
                                 self.pieces[rank + 1][file] = None;
-                                self.pieces[rank][file] = Some(PIECE::BLACK(TYPE::PAWN(false)));
+                                self.pieces[rank][file] = Some(Piece::Black(Type::Pawn(false)));
                                 return Ok(());
                             }
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(Error::MovementError);
+                                return Err(Error::Movement);
                             }
                         }
                     }
                     // square below is clear, now check if there's a piece 2 ranks ABOVE
                     else if let Some(piece) = &self.pieces[rank + 2][file] {
                         match piece {
-                            PIECE::BLACK(TYPE::PAWN(can_double_move)) => {
+                            Piece::Black(Type::Pawn(can_double_move)) => {
                                 if *can_double_move {
                                     self.pieces[rank + 2][file] = None;
-                                    self.pieces[rank][file] = Some(PIECE::BLACK(TYPE::PAWN(false)));
+                                    self.pieces[rank][file] = Some(Piece::Black(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::MovementError);
+                                    return Err(Error::Movement);
                                 }
                             }
                             // is any other piece
-                            _ => return Err(Error::MovementError),
+                            _ => return Err(Error::Movement),
                         }
                     }
                 }
             }
 
-            Err(Error::MovementError)
+            Err(Error::Movement)
         }
     }
 
-    fn capture(&mut self, move_struct: Move, player: &PLAYER) -> Result<(), Error> {
+    fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
         match move_struct.piece_type {
-            TYPE::PAWN(_) => {
+            Type::Pawn(_) => {
                 let (rank, file) = move_struct.coordinate;
 
                 match player {
-                    PLAYER::WHITE => {
+                    Player::White => {
                         // check black piece exists at coord
                         // if pawn, check white pawn exists at ( (rank - 1), (file +- 1)
-                        if let Some(PIECE::BLACK(_)) = self.pieces[rank][file] {
+                        if let Some(Piece::Black(_)) = self.pieces[rank][file] {
                             // is there a white pawn on {qualifier} file and rank -1
                             let attacker_file = file_to_index(&move_struct.file_qualifier.unwrap());
-                            if let Some(PIECE::WHITE(TYPE::PAWN(_))) =
+                            if let Some(Piece::White(Type::Pawn(_))) =
                                 &self.pieces[rank - 1][attacker_file]
                             {
                                 self.pieces[rank][file] =
@@ -347,19 +344,19 @@ impl Board {
                                 self.pieces[rank - 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(Error::CaptureError)
+                                Err(Error::Capture)
                             }
                         } else {
-                            Err(Error::CaptureError)
+                            Err(Error::Capture)
                         }
                     }
-                    PLAYER::BLACK => {
+                    Player::Black => {
                         // check black piece exists at coord
                         // if pawn, check white pawn exists at ( (rank - 1), (file +- 1)
-                        if let Some(PIECE::WHITE(_)) = self.pieces[rank][file] {
+                        if let Some(Piece::White(_)) = self.pieces[rank][file] {
                             // is there a white pawn on {qualifier} file and rank -1
                             let attacker_file = file_to_index(&move_struct.file_qualifier.unwrap());
-                            if let Some(PIECE::BLACK(TYPE::PAWN(_))) =
+                            if let Some(Piece::Black(Type::Pawn(_))) =
                                 &self.pieces[rank + 1][attacker_file]
                             {
                                 self.pieces[rank][file] =
@@ -367,10 +364,10 @@ impl Board {
                                 self.pieces[rank + 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(Error::MovementError)
+                                Err(Error::Movement)
                             }
                         } else {
-                            Err(Error::MovementError)
+                            Err(Error::Movement)
                         }
                     }
                 }
@@ -390,7 +387,7 @@ fn validate_input(usr_input: &str) -> Result<&str, Error> {
     .unwrap();
     assert!(re.is_match("d4 "));
     let Some(caps) = re.captures(&input) else {
-        return Err(Error::InvalidInputError);
+        return Err(Error::InvalidInput);
     };
     println!("captured: {:?}", caps);
     Ok(usr_input)
@@ -421,13 +418,13 @@ fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
 
         // has only piece or just a qualifier(pawn) eg. Nxd4 or exd4
         if piece_str.len() == 1 {
-            if let Ok(piece_type) = piece_str.parse::<TYPE>() {
+            if let Ok(piece_type) = piece_str.parse::<Type>() {
                 Ok(MoveType::Capture(Move {
                     coordinate: coordinate_to_index(
                         &coord_it.next().unwrap().to_string(),
                         &coord_it.next().unwrap().to_string(),
                     ),
-                    piece_type: piece_type,
+                    piece_type,
                     file_qualifier: None,
                 }))
                 //if it cannot be parsed into a type it is likely a pawn capture
@@ -438,7 +435,7 @@ fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
                         &coord_it.next().unwrap().to_string(),
                         &coord_it.next().unwrap().to_string(),
                     ),
-                    piece_type: TYPE::PAWN(false),
+                    piece_type: Type::Pawn(false),
                     file_qualifier: Some(piece_str.to_string()),
                 }))
             }
@@ -452,7 +449,7 @@ fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
                     &coord_it.next().unwrap().to_string(),
                 ),
                 piece_type: piece_it.nth(1).unwrap().to_string().parse().unwrap(),
-                file_qualifier: Some(piece_it.nth(0).unwrap().to_string()),
+                file_qualifier: Some(piece_it.next().unwrap().to_string()),
             }))
         } else {
             Err(ParseMoveError)
@@ -465,6 +462,7 @@ fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
     }
 }
 
+#[allow(dead_code)]
 enum MoveType {
     PawnPush((usize, usize)),
     Normal(Move),
@@ -478,7 +476,7 @@ struct Move {
     // (file, rank) eg. (e, 4)
     coordinate: (usize, usize),
 
-    piece_type: TYPE,
+    piece_type: Type,
     // exd5 has file qualifier of "e"
     file_qualifier: Option<String>,
 }
