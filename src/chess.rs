@@ -373,7 +373,10 @@ impl Board {
                 todo!()
             }
             Type::Rook => {
-                todo!()
+                let (from_rank, from_file) = self.check_straight_lines(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
+                self.pieces[from_rank][from_file] = None;
+                Ok(())
             }
             Type::Queen => {
                 todo!()
@@ -409,18 +412,6 @@ impl Board {
             panic!()
         };
 
-        //this is not nice at all but i can't focus rn
-
-        /*
-           march up diagonals until a piece is found, if piece is target success else continue
-           rank <= 7 && file <= 7 && rank >= 0 && file >=0
-
-
-
-        */
-
-        // need beter error messages!!!!!!!!!!
-
         let range = 0..=7;
 
         let offset_array: [i8; 2] = [1, -1];
@@ -442,71 +433,44 @@ impl Board {
                 }
             }
         }
-
-        /*
-
-                while self.pieces[rank + x_offset][file + y_offset].is_none() && {
-                    x_offset += 1;
-                    y_offset += 1;
-                    if rank + x_offset <= 7 || file - y_offset >= 0 {
-                        break
-                    }
-                }
-                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-                    return Ok((rank + x_offset, file + y_offset))
-                }
-
-                // 135
-                x_offset = 1;
-                y_offset = 1;
-
-                while self.pieces[rank + x_offset][file - y_offset].is_none() {
-                    x_offset += 1;
-                    y_offset += 1;
-                    if rank + x_offset <= 7 || file - y_offset >= 7 {
-                        break
-                    }
-                }
-                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-                    return Ok((rank + x_offset, file + y_offset))
-                }
-
-                // 225
-                x_offset = 1;
-                y_offset = 1;
-
-                while self.pieces[rank - x_offset][file - y_offset].is_none() {
-                    x_offset += 1;
-                    y_offset += 1;
-                    if rank - x_offset >= 7 || file - y_offset >= 7 {
-                        break
-                    }
-                }
-                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-                    return Ok((rank + x_offset, file + y_offset))
-                }
-
-                // 315
-                x_offset = 1;
-                y_offset = 1;
-
-                while self.pieces[rank - x_offset][file + y_offset].is_none() {
-                    x_offset += 1;
-                    y_offset += 1;
-                    if rank + x_offset >= 7 || file + y_offset >= 7 {
-                        break
-                    }
-                }
-                if self.pieces[rank + x_offset][file + y_offset] == Some(target_piece) {
-                    return Ok((rank + x_offset, file + y_offset))
-                }
-        */
-
         Err(Error::Movement("error checking diagonals".to_string()))
     }
 
-    fn check_straight_lines(&self) -> Result<(), Error> {
-        todo!()
+    fn check_straight_lines(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
+        // currently copy paste of diagnols with different offset array used
+        println!("checking straight lines");
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
+
+        let range = 0..=7;
+
+        let offset_array: [(i8, i8); 4]= [(0, 1), (1, 0), (-1, 0), (0, -1)];
+
+        // 01, 10, -10, 0-1
+        for (rank_offset, file_offset) in offset_array {
+            let mut search_rank: i8 = rank as i8 + rank_offset;
+            let mut search_file: i8 = file as i8 + file_offset;
+            while range.contains(&search_rank) && range.contains(&search_file) {
+                let piece = &self.pieces[search_rank as usize][search_file as usize];
+                if piece.is_none() {
+                    search_rank += rank_offset;
+                    search_file += file_offset;
+                    continue;
+                } else if piece.as_ref().unwrap() == &target_piece {
+                    return Ok((search_rank as usize, search_file as usize));
+                } else {
+                    break;
+                }
+            }
+        }
+        Err(Error::Movement("error checking straight lines".to_string()))
     }
 
     fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
@@ -577,6 +541,13 @@ impl Board {
             }
             Type::Bishop => {
                 let (rank_0, file_0) = self.check_diagonals(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
+                self.pieces[rank_0][file_0] = None;
+
+                Ok(())
+            }
+            Type::Rook => {
+                let (rank_0, file_0) = self.check_straight_lines(move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
                 self.pieces[rank_0][file_0] = None;
 
