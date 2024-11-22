@@ -2,12 +2,8 @@ use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
 
-pub enum Player {
-    White,
-    Black,
-}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Type {
     // has moved: bool
     Pawn(bool),
@@ -16,22 +12,6 @@ enum Type {
     Rook,
     Queen,
     King,
-}
-
-//piece defined by colour and type
-#[derive(Debug, Clone)]
-enum Piece {
-    Black(Type),
-    White(Type),
-}
-
-#[derive(Debug)]
-pub enum Error {
-    ParsePiece,
-    InvalidInput,
-    Movement,
-    Capture,
-    BoardUpdate,
 }
 
 impl FromStr for Type {
@@ -47,6 +27,15 @@ impl FromStr for Type {
         }
     }
 }
+
+
+//piece defined by colour and type
+#[derive(Debug, Clone, PartialEq)]
+enum Piece {
+    Black(Type),
+    White(Type),
+}
+
 
 impl fmt::Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -71,6 +60,41 @@ impl fmt::Display for Piece {
         write!(f, "{}", s)
     }
 }
+
+
+pub enum Player {
+    White,
+    Black,
+}
+
+#[derive(Debug)]
+pub enum Error {
+    ParsePiece,
+    InvalidInput,
+    Movement(String),
+    Capture,
+}
+
+#[allow(dead_code)]
+enum MoveType {
+    PawnPush((usize, usize)),
+    Normal(Move),
+    Capture(Move),
+    ShortCastle,
+    LongCastle,
+}
+
+#[derive(Debug)]
+struct Move {
+    // (file, rank) eg. (e, 4)
+    coordinate: (usize, usize),
+
+    piece_type: Type,
+    // exd5 has file qualifier of "e"
+    file_qualifier: Option<String>,
+}
+
+
 
 //2d vector representation of the board
 
@@ -235,17 +259,18 @@ impl Board {
         // e3 not empty? contains white pawn? => e3 -> e4, contains Some(Piece) => invalid
         // e2 contains white pawn(never moved = true)? => e3 -> e4
         match move_type {
-            MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
-            MoveType::Capture(move_struct) => self.capture(move_struct, player),
-            _ => Err(Error::BoardUpdate),
+            MoveType::PawnPush((rank, file)) => Ok(self.pawn_push(rank, file, player)?),
+            MoveType::Capture(move_struct) => Ok(self.capture(move_struct, player)?),
+            MoveType::Normal(move_struct) => self.normal_move(move_struct, player),
+            MoveType::LongCastle => self.long_castle(player),
+            MoveType::ShortCastle => self.short_castle(player),
         }
     }
 
     fn pawn_push(&mut self, rank: usize, file: usize, player: &Player) -> Result<(), Error> {
         // if piece is occupied
         if self.pieces[rank][file].is_some() {
-            println!("space occupied...");
-            Err(Error::Movement)
+            Err(Error::Movement("space occupied...".to_string()))
         } else {
             match player {
                 // White TO MOVE
@@ -262,7 +287,7 @@ impl Board {
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(Error::Movement);
+                                return Err(Error::Movement("blocked path".to_string()));
                             }
                         }
                     }
@@ -275,11 +300,11 @@ impl Board {
                                     self.pieces[rank][file] = Some(Piece::White(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::Movement);
+                                    return Err(Error::Movement("Pawn cannot double move".to_string()));
                                 }
                             }
                             // is any other piece
-                            _ => return Err(Error::Movement),
+                            _ => return Err(Error::Movement("invalid pawn move".to_string())),
                         }
                     }
                 }
@@ -297,7 +322,7 @@ impl Board {
                             // if it's anything else
                             _ => {
                                 println!("occupied below");
-                                return Err(Error::Movement);
+                                return Err(Error::Movement("blocked path".to_string()));
                             }
                         }
                     }
@@ -310,19 +335,179 @@ impl Board {
                                     self.pieces[rank][file] = Some(Piece::Black(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::Movement);
+                                    return Err(Error::Movement("Pawn cannot double move".to_string()));
                                 }
                             }
                             // is any other piece
-                            _ => return Err(Error::Movement),
+                            _ => return Err(Error::Movement("invalid pawn move".to_string())),
                         }
                     }
                 }
             }
 
-            Err(Error::Movement)
+            Err(Error::Movement("generic pawn push error".to_string()))
         }
     }
+
+    fn normal_move(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
+        /*
+        bishop, check diagonals
+        rook, check right angles
+        knight, no need to checks Ls as can jump
+        king, 
+        queen == rook + bishop 
+        */
+        let (rank, file) = move_struct.coordinate;
+        if self.pieces[rank][file].is_some() {
+            return Err(Error::Movement("space is occupied! Maybe try capture notation instead".to_string()));
+        }
+
+        match move_struct.piece_type {
+            Type::Bishop => {
+                let (from_rank, from_file) = self.check_diagonals(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
+                self.pieces[from_rank][from_file] = None;
+                Ok(())
+            },
+            Type::Knight => {todo!()},
+            Type::Rook => {todo!()},
+            Type::Queen => {todo!()},
+            Type::King => {todo!()},
+            Type::Pawn(_) => {panic!()},
+        }
+    }
+
+    fn short_castle(&mut self, player: &Player) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn long_castle(&mut self, player: &Player) -> Result<(), Error> {
+        todo!()
+    }
+
+    // checks for clear diagonal path between locaton and destination
+    // returns the location of the piece to move on success
+    fn check_diagonals(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
+        // search in all diagonal free spaces until the right piece is found
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {panic!()};
+
+        //this is not nice at all but i can't focus rn
+
+
+    
+
+
+        /*
+            march up diagonals until a piece is found, if piece is target success else continue
+            rank <= 7 && file <= 7 && rank >= 0 && file >=0 
+
+
+
+         */
+
+        // need beter error messages!!!!!!!!!!
+       
+        let range = 0..=7;
+
+        let offset_array: [i8; 2] = [1, -1];
+        for rank_offset in offset_array {
+            for file_offset in offset_array {
+                let mut search_rank: i8 = rank as i8 + rank_offset;
+                let mut search_file: i8 = file as i8 + file_offset;
+                while range.contains(&search_rank) && range.contains(&search_file) {
+                    let piece = &self.pieces[search_rank as usize][search_file as usize];
+                    if piece.is_none() {
+                        search_rank += rank_offset;
+                        search_file += file_offset;
+                        continue
+                    } else if piece.as_ref().unwrap() == &target_piece {
+                        return Ok((search_rank as usize, search_file as usize));
+                    } else {
+                        break
+                    }
+                }
+            }
+
+        }
+
+        
+        /* 
+
+        while self.pieces[rank + x_offset][file + y_offset].is_none() && {
+            x_offset += 1;
+            y_offset += 1;
+            if rank + x_offset <= 7 || file - y_offset >= 0 {
+                break
+            }
+        }
+        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+            return Ok((rank + x_offset, file + y_offset))
+        }
+        
+        // 135
+        x_offset = 1;
+        y_offset = 1;
+        
+        while self.pieces[rank + x_offset][file - y_offset].is_none() {
+            x_offset += 1;
+            y_offset += 1;
+            if rank + x_offset <= 7 || file - y_offset >= 7 {
+                break
+            }
+        }
+        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+            return Ok((rank + x_offset, file + y_offset))
+        }
+        
+        // 225
+        x_offset = 1;
+        y_offset = 1;
+       
+        while self.pieces[rank - x_offset][file - y_offset].is_none() {
+            x_offset += 1;
+            y_offset += 1;
+            if rank - x_offset >= 7 || file - y_offset >= 7 {
+                break
+            }
+        }
+        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+            return Ok((rank + x_offset, file + y_offset))
+        }
+      
+        // 315
+        x_offset = 1;
+        y_offset = 1;
+       
+        while self.pieces[rank - x_offset][file + y_offset].is_none() {
+            x_offset += 1;
+            y_offset += 1;
+            if rank + x_offset >= 7 || file + y_offset >= 7 {
+                break
+            }
+        }
+        if self.pieces[rank + x_offset][file + y_offset] == Some(target_piece) {
+            return Ok((rank + x_offset, file + y_offset))
+        }
+*/
+
+        Err(Error::Movement("error checking diagonals".to_string()))
+        
+
+    }
+
+    fn check_straight_lines(&self) -> Result<(), Error> {
+        todo!()
+    }
+
+
+
+
 
     fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
         match move_struct.piece_type {
@@ -364,10 +549,10 @@ impl Board {
                                 self.pieces[rank + 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(Error::Movement)
+                                Err(Error::Capture)
                             }
                         } else {
-                            Err(Error::Movement)
+                            Err(Error::Capture)
                         }
                     }
                 }
@@ -376,6 +561,13 @@ impl Board {
         }
     }
 }
+
+
+
+
+
+
+
 
 // checks that input is valid using regex
 fn validate_input(usr_input: &str) -> Result<&str, Error> {
@@ -394,7 +586,7 @@ fn validate_input(usr_input: &str) -> Result<&str, Error> {
 }
 
 // converts validated input to a MoveType
-fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
+fn parse_input(usr_input: &str) -> Result<MoveType, Error> {
     /*4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 d6 8.c3 O-O 9.h3 Nb8 10.d4 Nbd7
     11.c4 c6 12.cxb5 axb5 13.Nc3 Bb7 14.Bg5 b4 15.Nb1 h6 16.Bh4 c5 17.dxe5
     Nxe4 18.Bxe7 Qxe7 19.exd6 Qf6 20.Nbd2 Nxd6 21.Nc4 Nxc4 22.Bxc4 Nb6
@@ -452,36 +644,32 @@ fn parse_input(usr_input: &str) -> Result<MoveType, ParseMoveError> {
                 file_qualifier: Some(piece_it.next().unwrap().to_string()),
             }))
         } else {
-            Err(ParseMoveError)
+            Err(Error::ParsePiece)
         }
     }
-    // move type not implemented yet
+    // non pawn movement
+    else if usr_input.len() == 3 {
+        let mut it = usr_input.chars();
+        let piece_type: Type = it.next().unwrap().to_string().parse().unwrap();
+
+        Ok(MoveType::Normal(Move {
+            coordinate: coordinate_to_index(
+                &it.next().unwrap().to_string(),
+                &it.next().unwrap().to_string(),
+            ),
+            piece_type,
+            file_qualifier: None,
+        }))
+    }
     else {
         todo!();
-        //Err(ParseMoveError)
     }
 }
 
-#[allow(dead_code)]
-enum MoveType {
-    PawnPush((usize, usize)),
-    Normal(Move),
-    Capture(Move),
-    ShortCastle,
-    LongCastle,
-}
 
-#[derive(Debug)]
-struct Move {
-    // (file, rank) eg. (e, 4)
-    coordinate: (usize, usize),
 
-    piece_type: Type,
-    // exd5 has file qualifier of "e"
-    file_qualifier: Option<String>,
-}
-#[derive(Debug)]
-struct ParseMoveError;
+
+// helper functions
 
 // chess coordinate to 2d vector index. NOTE: origin is bottom-left like a chess bboard
 fn coordinate_to_index(file: &str, rank: &str) -> (usize, usize) {
