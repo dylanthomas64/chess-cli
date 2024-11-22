@@ -370,7 +370,10 @@ impl Board {
                 Ok(())
             }
             Type::Knight => {
-                todo!()
+                let (from_rank, from_file) = self.check_knight_lines(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
+                self.pieces[from_rank][from_file] = None;
+                Ok(())
             }
             Type::Rook => {
                 let (from_rank, from_file) = self.check_straight_lines(move_struct, player)?;
@@ -388,89 +391,6 @@ impl Board {
                 panic!()
             }
         }
-    }
-
-    fn short_castle(&mut self, player: &Player) -> Result<(), Error> {
-        todo!()
-    }
-
-    fn long_castle(&mut self, player: &Player) -> Result<(), Error> {
-        todo!()
-    }
-
-    // checks for clear diagonal path between locaton and destination
-    // returns the location of the piece to move on success
-    fn check_diagonals(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
-        // search in all diagonal free spaces until the right piece is found
-        let (rank, file) = move_struct.coordinate;
-        let target_piece = match player {
-            Player::White => Piece::White(move_struct.piece_type),
-            Player::Black => Piece::Black(move_struct.piece_type),
-        };
-
-        if move_struct.file_qualifier.is_some() {
-            panic!()
-        };
-
-        let range = 0..=7;
-
-        let offset_array: [i8; 2] = [1, -1];
-        for rank_offset in offset_array {
-            for file_offset in offset_array {
-                let mut search_rank: i8 = rank as i8 + rank_offset;
-                let mut search_file: i8 = file as i8 + file_offset;
-                while range.contains(&search_rank) && range.contains(&search_file) {
-                    let piece = &self.pieces[search_rank as usize][search_file as usize];
-                    if piece.is_none() {
-                        search_rank += rank_offset;
-                        search_file += file_offset;
-                        continue;
-                    } else if piece.as_ref().unwrap() == &target_piece {
-                        return Ok((search_rank as usize, search_file as usize));
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-        Err(Error::Movement("error checking diagonals".to_string()))
-    }
-
-    fn check_straight_lines(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
-        // currently copy paste of diagnols with different offset array used
-        println!("checking straight lines");
-        let (rank, file) = move_struct.coordinate;
-        let target_piece = match player {
-            Player::White => Piece::White(move_struct.piece_type),
-            Player::Black => Piece::Black(move_struct.piece_type),
-        };
-
-        if move_struct.file_qualifier.is_some() {
-            panic!()
-        };
-
-        let range = 0..=7;
-
-        let offset_array: [(i8, i8); 4]= [(0, 1), (1, 0), (-1, 0), (0, -1)];
-
-        // 01, 10, -10, 0-1
-        for (rank_offset, file_offset) in offset_array {
-            let mut search_rank: i8 = rank as i8 + rank_offset;
-            let mut search_file: i8 = file as i8 + file_offset;
-            while range.contains(&search_rank) && range.contains(&search_file) {
-                let piece = &self.pieces[search_rank as usize][search_file as usize];
-                if piece.is_none() {
-                    search_rank += rank_offset;
-                    search_file += file_offset;
-                    continue;
-                } else if piece.as_ref().unwrap() == &target_piece {
-                    return Ok((search_rank as usize, search_file as usize));
-                } else {
-                    break;
-                }
-            }
-        }
-        Err(Error::Movement("error checking straight lines".to_string()))
     }
 
     fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
@@ -553,8 +473,147 @@ impl Board {
 
                 Ok(())
             }
+            Type::Knight => {
+                let (rank_0, file_0) = self.check_knight_lines(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
+                self.pieces[rank_0][file_0] = None;
+
+                Ok(())
+            }
             _ => todo!(),
         }
+    }
+
+    fn short_castle(&mut self, player: &Player) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn long_castle(&mut self, player: &Player) -> Result<(), Error> {
+        todo!()
+    }
+
+    // checks for clear diagonal path between locaton and destination
+    // returns the location of the piece to move on success
+    fn check_diagonals(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
+        // search in all diagonal free spaces until the right piece is found
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
+
+        let range = 0..=7;
+
+        let offset_array: [i8; 2] = [1, -1];
+        for rank_offset in offset_array {
+            for file_offset in offset_array {
+                let mut search_rank: i8 = rank as i8 + rank_offset;
+                let mut search_file: i8 = file as i8 + file_offset;
+                while range.contains(&search_rank) && range.contains(&search_file) {
+                    let piece = &self.pieces[search_rank as usize][search_file as usize];
+                    if piece.is_none() {
+                        search_rank += rank_offset;
+                        search_file += file_offset;
+                        continue;
+                    } else if piece.as_ref().unwrap() == &target_piece {
+                        return Ok((search_rank as usize, search_file as usize));
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        Err(Error::Movement("error checking diagonals".to_string()))
+    }
+
+    fn check_straight_lines(
+        &self,
+        move_struct: Move,
+        player: &Player,
+    ) -> Result<(usize, usize), Error> {
+        // currently copy paste of diagnols with different offset array used
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
+
+        let range = 0..=7;
+
+        let offset_array: [(i8, i8); 4] = [(0, 1), (1, 0), (-1, 0), (0, -1)];
+
+        // 01, 10, -10, 0-1
+        for (rank_offset, file_offset) in offset_array {
+            let mut search_rank: i8 = rank as i8 + rank_offset;
+            let mut search_file: i8 = file as i8 + file_offset;
+            while range.contains(&search_rank) && range.contains(&search_file) {
+                let piece = &self.pieces[search_rank as usize][search_file as usize];
+                if piece.is_none() {
+                    search_rank += rank_offset;
+                    search_file += file_offset;
+                    continue;
+                } else if piece.as_ref().unwrap() == &target_piece {
+                    return Ok((search_rank as usize, search_file as usize));
+                } else {
+                    break;
+                }
+            }
+        }
+        Err(Error::Movement("error checking straight lines".to_string()))
+    }
+
+    fn check_knight_lines(
+        &self,
+        move_struct: Move,
+        player: &Player,
+    ) -> Result<(usize, usize), Error> {
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
+
+        let range = 0..=7;
+
+        let offset_array: [(i8, i8); 8] = [
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
+            (-2, 1),
+            (-2, -1),
+            (2, 1),
+            (2, -1),
+        ];
+
+        // 21, 12, -12, 1-2, -21, -2-1, -1-2, -12,
+
+        for (rank_offset, file_offset) in offset_array {
+            let search_rank: i8 = rank as i8 + rank_offset;
+            let search_file: i8 = file as i8 + file_offset;
+
+            if range.contains(&search_rank) && range.contains(&search_file) {
+                let piece = &self.pieces[search_rank as usize][search_file as usize];
+                if piece.is_none() {
+                    continue;
+                } else if piece.as_ref().unwrap() == &target_piece {
+                    return Ok((search_rank as usize, search_file as usize));
+                }
+            }
+        }
+        Err(Error::Movement("error checking knight line".to_string()))
     }
 }
 
