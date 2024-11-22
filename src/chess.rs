@@ -2,7 +2,6 @@ use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
 
-
 #[derive(Debug, Clone, PartialEq)]
 enum Type {
     // has moved: bool
@@ -28,14 +27,12 @@ impl FromStr for Type {
     }
 }
 
-
 //piece defined by colour and type
 #[derive(Debug, Clone, PartialEq)]
 enum Piece {
     Black(Type),
     White(Type),
 }
-
 
 impl fmt::Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -61,7 +58,6 @@ impl fmt::Display for Piece {
     }
 }
 
-
 pub enum Player {
     White,
     Black,
@@ -72,7 +68,7 @@ pub enum Error {
     ParsePiece,
     InvalidInput,
     Movement(String),
-    Capture,
+    Capture(String),
 }
 
 #[allow(dead_code)]
@@ -93,8 +89,6 @@ struct Move {
     // exd5 has file qualifier of "e"
     file_qualifier: Option<String>,
 }
-
-
 
 //2d vector representation of the board
 
@@ -259,8 +253,8 @@ impl Board {
         // e3 not empty? contains white pawn? => e3 -> e4, contains Some(Piece) => invalid
         // e2 contains white pawn(never moved = true)? => e3 -> e4
         match move_type {
-            MoveType::PawnPush((rank, file)) => Ok(self.pawn_push(rank, file, player)?),
-            MoveType::Capture(move_struct) => Ok(self.capture(move_struct, player)?),
+            MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
+            MoveType::Capture(move_struct) => self.capture(move_struct, player),
             MoveType::Normal(move_struct) => self.normal_move(move_struct, player),
             MoveType::LongCastle => self.long_castle(player),
             MoveType::ShortCastle => self.short_castle(player),
@@ -300,7 +294,9 @@ impl Board {
                                     self.pieces[rank][file] = Some(Piece::White(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::Movement("Pawn cannot double move".to_string()));
+                                    return Err(Error::Movement(
+                                        "Pawn cannot double move".to_string(),
+                                    ));
                                 }
                             }
                             // is any other piece
@@ -335,7 +331,9 @@ impl Board {
                                     self.pieces[rank][file] = Some(Piece::Black(Type::Pawn(false)));
                                     return Ok(());
                                 } else {
-                                    return Err(Error::Movement("Pawn cannot double move".to_string()));
+                                    return Err(Error::Movement(
+                                        "Pawn cannot double move".to_string(),
+                                    ));
                                 }
                             }
                             // is any other piece
@@ -354,12 +352,14 @@ impl Board {
         bishop, check diagonals
         rook, check right angles
         knight, no need to checks Ls as can jump
-        king, 
-        queen == rook + bishop 
+        king,
+        queen == rook + bishop
         */
         let (rank, file) = move_struct.coordinate;
         if self.pieces[rank][file].is_some() {
-            return Err(Error::Movement("space is occupied! Maybe try capture notation instead".to_string()));
+            return Err(Error::Movement(
+                "space is occupied! Maybe try capture notation instead".to_string(),
+            ));
         }
 
         match move_struct.piece_type {
@@ -368,12 +368,22 @@ impl Board {
                 self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
                 self.pieces[from_rank][from_file] = None;
                 Ok(())
-            },
-            Type::Knight => {todo!()},
-            Type::Rook => {todo!()},
-            Type::Queen => {todo!()},
-            Type::King => {todo!()},
-            Type::Pawn(_) => {panic!()},
+            }
+            Type::Knight => {
+                todo!()
+            }
+            Type::Rook => {
+                todo!()
+            }
+            Type::Queen => {
+                todo!()
+            }
+            Type::King => {
+                todo!()
+            }
+            Type::Pawn(_) => {
+                panic!()
+            }
         }
     }
 
@@ -395,24 +405,22 @@ impl Board {
             Player::Black => Piece::Black(move_struct.piece_type),
         };
 
-        if move_struct.file_qualifier.is_some() {panic!()};
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
 
         //this is not nice at all but i can't focus rn
 
-
-    
-
-
         /*
-            march up diagonals until a piece is found, if piece is target success else continue
-            rank <= 7 && file <= 7 && rank >= 0 && file >=0 
+           march up diagonals until a piece is found, if piece is target success else continue
+           rank <= 7 && file <= 7 && rank >= 0 && file >=0
 
 
 
-         */
+        */
 
         // need beter error messages!!!!!!!!!!
-       
+
         let range = 0..=7;
 
         let offset_array: [i8; 2] = [1, -1];
@@ -425,95 +433,105 @@ impl Board {
                     if piece.is_none() {
                         search_rank += rank_offset;
                         search_file += file_offset;
-                        continue
+                        continue;
                     } else if piece.as_ref().unwrap() == &target_piece {
                         return Ok((search_rank as usize, search_file as usize));
                     } else {
-                        break
+                        break;
                     }
                 }
             }
-
         }
 
-        
-        /* 
+        /*
 
-        while self.pieces[rank + x_offset][file + y_offset].is_none() && {
-            x_offset += 1;
-            y_offset += 1;
-            if rank + x_offset <= 7 || file - y_offset >= 0 {
-                break
-            }
-        }
-        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-            return Ok((rank + x_offset, file + y_offset))
-        }
-        
-        // 135
-        x_offset = 1;
-        y_offset = 1;
-        
-        while self.pieces[rank + x_offset][file - y_offset].is_none() {
-            x_offset += 1;
-            y_offset += 1;
-            if rank + x_offset <= 7 || file - y_offset >= 7 {
-                break
-            }
-        }
-        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-            return Ok((rank + x_offset, file + y_offset))
-        }
-        
-        // 225
-        x_offset = 1;
-        y_offset = 1;
-       
-        while self.pieces[rank - x_offset][file - y_offset].is_none() {
-            x_offset += 1;
-            y_offset += 1;
-            if rank - x_offset >= 7 || file - y_offset >= 7 {
-                break
-            }
-        }
-        if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
-            return Ok((rank + x_offset, file + y_offset))
-        }
-      
-        // 315
-        x_offset = 1;
-        y_offset = 1;
-       
-        while self.pieces[rank - x_offset][file + y_offset].is_none() {
-            x_offset += 1;
-            y_offset += 1;
-            if rank + x_offset >= 7 || file + y_offset >= 7 {
-                break
-            }
-        }
-        if self.pieces[rank + x_offset][file + y_offset] == Some(target_piece) {
-            return Ok((rank + x_offset, file + y_offset))
-        }
-*/
+                while self.pieces[rank + x_offset][file + y_offset].is_none() && {
+                    x_offset += 1;
+                    y_offset += 1;
+                    if rank + x_offset <= 7 || file - y_offset >= 0 {
+                        break
+                    }
+                }
+                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+                    return Ok((rank + x_offset, file + y_offset))
+                }
+
+                // 135
+                x_offset = 1;
+                y_offset = 1;
+
+                while self.pieces[rank + x_offset][file - y_offset].is_none() {
+                    x_offset += 1;
+                    y_offset += 1;
+                    if rank + x_offset <= 7 || file - y_offset >= 7 {
+                        break
+                    }
+                }
+                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+                    return Ok((rank + x_offset, file + y_offset))
+                }
+
+                // 225
+                x_offset = 1;
+                y_offset = 1;
+
+                while self.pieces[rank - x_offset][file - y_offset].is_none() {
+                    x_offset += 1;
+                    y_offset += 1;
+                    if rank - x_offset >= 7 || file - y_offset >= 7 {
+                        break
+                    }
+                }
+                if &self.pieces[rank + x_offset][file + y_offset].clone().unwrap() == &target_piece {
+                    return Ok((rank + x_offset, file + y_offset))
+                }
+
+                // 315
+                x_offset = 1;
+                y_offset = 1;
+
+                while self.pieces[rank - x_offset][file + y_offset].is_none() {
+                    x_offset += 1;
+                    y_offset += 1;
+                    if rank + x_offset >= 7 || file + y_offset >= 7 {
+                        break
+                    }
+                }
+                if self.pieces[rank + x_offset][file + y_offset] == Some(target_piece) {
+                    return Ok((rank + x_offset, file + y_offset))
+                }
+        */
 
         Err(Error::Movement("error checking diagonals".to_string()))
-        
-
     }
 
     fn check_straight_lines(&self) -> Result<(), Error> {
         todo!()
     }
 
-
-
-
-
     fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
+        let (rank, file) = move_struct.coordinate;
+        let piece = self.pieces[rank][file].clone();
+
+        if piece.is_none() {
+            return Err(Error::Capture("cannot capture empty square".to_string()));
+        } else {
+            match player {
+                Player::White => {
+                    if let Some(Piece::White(_)) = piece {
+                        return Err(Error::Capture("cannot capture your own piece".to_string()));
+                    }
+                }
+                Player::Black => {
+                    if let Some(Piece::Black(_)) = piece {
+                        return Err(Error::Capture("cannot capture your own piece".to_string()));
+                    }
+                }
+            }
+        }
+
         match move_struct.piece_type {
             Type::Pawn(_) => {
-                let (rank, file) = move_struct.coordinate;
-
                 match player {
                     Player::White => {
                         // check black piece exists at coord
@@ -529,10 +547,10 @@ impl Board {
                                 self.pieces[rank - 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(Error::Capture)
+                                Err(Error::Capture("pawn capture error".to_string()))
                             }
                         } else {
-                            Err(Error::Capture)
+                            Err(Error::Capture("cannot capture your own piece!".to_string()))
                         }
                     }
                     Player::Black => {
@@ -549,25 +567,25 @@ impl Board {
                                 self.pieces[rank + 1][attacker_file] = None;
                                 Ok(())
                             } else {
-                                Err(Error::Capture)
+                                Err(Error::Capture("pawn capture error".to_string()))
                             }
                         } else {
-                            Err(Error::Capture)
+                            Err(Error::Capture("cannot capture your own piece!".to_string()))
                         }
                     }
                 }
+            }
+            Type::Bishop => {
+                let (rank_0, file_0) = self.check_diagonals(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
+                self.pieces[rank_0][file_0] = None;
+
+                Ok(())
             }
             _ => todo!(),
         }
     }
 }
-
-
-
-
-
-
-
 
 // checks that input is valid using regex
 fn validate_input(usr_input: &str) -> Result<&str, Error> {
@@ -660,14 +678,10 @@ fn parse_input(usr_input: &str) -> Result<MoveType, Error> {
             piece_type,
             file_qualifier: None,
         }))
-    }
-    else {
+    } else {
         todo!();
     }
 }
-
-
-
 
 // helper functions
 

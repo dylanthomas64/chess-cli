@@ -22,42 +22,50 @@ fn main() {
 
     board.print();
 
-    // main loop
-    loop {
-        // white turn
-        match get_usr_input(&white) {
-            Ok(usr_input) => {
-                if usr_input == "q" {
-                    break;
-                };
-                if let Err(err) = board.play_move(&white, &usr_input) {
+    'main: loop {
+        // main loop
+        loop {
+            // white turn
+            match get_usr_input(&white) {
+                Ok(usr_input) => {
+                    if usr_input == "q" {
+                        break 'main;
+                    };
+                    if let Err(err) = board.play_move(&white, &usr_input) {
+                        eprintln!("{:?}", err);
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                Err(err) => {
                     eprintln!("{:?}", err);
                     continue;
                 }
-            }
-            Err(err) => {
-                eprintln!("{:?}", err);
-                continue;
             }
         }
-
-        // black turn
-        match get_usr_input(&black) {
-            Ok(usr_input) => {
-                if usr_input == "q" {
-                    break;
-                };
-                if let Err(err) = board.play_move(&black, &usr_input) {
+        loop {
+            // black turn
+            match get_usr_input(&black) {
+                Ok(usr_input) => {
+                    if usr_input == "q" {
+                        break 'main;
+                    };
+                    if let Err(err) = board.play_move(&black, &usr_input) {
+                        eprintln!("{:?}", err);
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                Err(err) => {
                     eprintln!("{:?}", err);
                     continue;
                 }
-            }
-            Err(err) => {
-                eprintln!("{:?}", err);
-                continue;
             }
         }
     }
+
     println!("Exiting program...");
 }
 
