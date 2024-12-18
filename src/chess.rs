@@ -2,7 +2,7 @@ use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 enum Type {
     // has moved: bool
     Pawn(bool),
@@ -246,16 +246,13 @@ impl Board {
         //assert_ne!(usr_input, "q");
     }
 
-    // update the board with applied move
+    // update the board by running relevant method
     fn update_board(&mut self, move_type: MoveType, player: &Player) -> Result<(), Error> {
-        // special case: if rank 4 then do this. else do what's below for e5.
-        // e4 empty?
-        // e3 not empty? contains white pawn? => e3 -> e4, contains Some(Piece) => invalid
-        // e2 contains white pawn(never moved = true)? => e3 -> e4
+        
         match move_type {
             MoveType::PawnPush((rank, file)) => self.pawn_push(rank, file, player),
-            MoveType::Capture(move_struct) => self.capture(move_struct, player),
-            MoveType::Normal(move_struct) => self.normal_move(move_struct, player),
+            MoveType::Capture(move_struct) => self.capture(&move_struct, player),
+            MoveType::Normal(move_struct) => self.normal_move(&move_struct, player),
             MoveType::LongCastle => self.long_castle(player),
             MoveType::ShortCastle => self.short_castle(player),
         }
@@ -347,7 +344,7 @@ impl Board {
         }
     }
 
-    fn normal_move(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
+    fn normal_move(&mut self, move_struct: &Move, player: &Player) -> Result<(), Error> {
         /*
         bishop, check diagonals
         rook, check right angles
@@ -370,19 +367,29 @@ impl Board {
                 Ok(())
             }
             Type::Knight => {
-                let (from_rank, from_file) = self.check_knight_lines(move_struct, player)?;
+                let (from_rank, from_file) = self.check_knight_lines(&move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
                 self.pieces[from_rank][from_file] = None;
                 Ok(())
             }
             Type::Rook => {
-                let (from_rank, from_file) = self.check_straight_lines(move_struct, player)?;
+                let (from_rank, from_file) = self.check_straight_lines(&move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
                 self.pieces[from_rank][from_file] = None;
                 Ok(())
             }
             Type::Queen => {
-                todo!()
+                // diagonals and straight lines
+                if let Ok((diagonal_rank, diagonal_file)) = self.check_diagonals(&move_struct, player) {
+                    //found a match on diagonal
+                    self.pieces[rank][file] = self.pieces[diagonal_rank][diagonal_file].clone();
+                    self.pieces[diagonal_rank][diagonal_file] = None;
+                } else {
+                    let (straight_rank, straight_file) = self.check_straight_lines(&move_struct, player)?;
+                    self.pieces[rank][file] = self.pieces[straight_rank][straight_file].clone();
+                    self.pieces[straight_rank][straight_file] = None;
+                }
+                Ok(())
             }
             Type::King => {
                 todo!()
@@ -393,7 +400,7 @@ impl Board {
         }
     }
 
-    fn capture(&mut self, move_struct: Move, player: &Player) -> Result<(), Error> {
+    fn capture(&mut self, move_struct: &Move, player: &Player) -> Result<(), Error> {
         let (rank, file) = move_struct.coordinate;
         let piece = self.pieces[rank][file].clone();
 
@@ -422,7 +429,7 @@ impl Board {
                         // if pawn, check white pawn exists at ( (rank - 1), (file +- 1)
                         if let Some(Piece::Black(_)) = self.pieces[rank][file] {
                             // is there a white pawn on {qualifier} file and rank -1
-                            let attacker_file = file_to_index(&move_struct.file_qualifier.unwrap());
+                            let attacker_file = file_to_index(&move_struct.file_qualifier.as_ref().unwrap());
                             if let Some(Piece::White(Type::Pawn(_))) =
                                 &self.pieces[rank - 1][attacker_file]
                             {
@@ -442,7 +449,7 @@ impl Board {
                         // if pawn, check white pawn exists at ( (rank - 1), (file +- 1)
                         if let Some(Piece::White(_)) = self.pieces[rank][file] {
                             // is there a white pawn on {qualifier} file and rank -1
-                            let attacker_file = file_to_index(&move_struct.file_qualifier.unwrap());
+                            let attacker_file = file_to_index(&move_struct.file_qualifier.as_ref().unwrap());
                             if let Some(Piece::Black(Type::Pawn(_))) =
                                 &self.pieces[rank + 1][attacker_file]
                             {
@@ -460,21 +467,21 @@ impl Board {
                 }
             }
             Type::Bishop => {
-                let (rank_0, file_0) = self.check_diagonals(move_struct, player)?;
+                let (rank_0, file_0) = self.check_diagonals(&move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
                 self.pieces[rank_0][file_0] = None;
 
                 Ok(())
             }
             Type::Rook => {
-                let (rank_0, file_0) = self.check_straight_lines(move_struct, player)?;
+                let (rank_0, file_0) = self.check_straight_lines(&move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
                 self.pieces[rank_0][file_0] = None;
 
                 Ok(())
             }
             Type::Knight => {
-                let (rank_0, file_0) = self.check_knight_lines(move_struct, player)?;
+                let (rank_0, file_0) = self.check_knight_lines(&move_struct, player)?;
                 self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
                 self.pieces[rank_0][file_0] = None;
 
@@ -494,7 +501,7 @@ impl Board {
 
     // checks for clear diagonal path between locaton and destination
     // returns the location of the piece to move on success
-    fn check_diagonals(&self, move_struct: Move, player: &Player) -> Result<(usize, usize), Error> {
+    fn check_diagonals(&self, move_struct: &Move, player: &Player) -> Result<(usize, usize), Error> {
         // search in all diagonal free spaces until the right piece is found
         let (rank, file) = move_struct.coordinate;
         let target_piece = match player {
@@ -532,7 +539,7 @@ impl Board {
 
     fn check_straight_lines(
         &self,
-        move_struct: Move,
+        move_struct: &Move,
         player: &Player,
     ) -> Result<(usize, usize), Error> {
         // currently copy paste of diagnols with different offset array used
@@ -543,7 +550,7 @@ impl Board {
         };
 
         if move_struct.file_qualifier.is_some() {
-            panic!()
+            todo!()
         };
 
         let range = 0..=7;
@@ -572,7 +579,7 @@ impl Board {
 
     fn check_knight_lines(
         &self,
-        move_struct: Move,
+        move_struct: &Move,
         player: &Player,
     ) -> Result<(usize, usize), Error> {
         let (rank, file) = move_struct.coordinate;
