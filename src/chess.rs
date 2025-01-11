@@ -235,7 +235,7 @@ impl Board {
     pub fn play_move(&mut self, player: &Player, usr_input: &str) -> Result<(), Error> {
         match validate_input(usr_input) {
             Ok(usr_input) => {
-                let move_type: MoveType = parse_input(usr_input).unwrap();
+                let move_type: MoveType = parse_input(usr_input)?;
                 self.update_board(move_type, player)?;
                 self.print();
                 Ok(())
@@ -394,10 +394,13 @@ impl Board {
                 Ok(())
             }
             Type::King => {
-                todo!()
+                let (from_rank, from_file) = self.check_surrounding_squares(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
+                self.pieces[from_rank][from_file] = None;
+                Ok(())
             }
             Type::Pawn(_) => {
-                panic!()
+                panic!();
             }
         }
     }
@@ -471,6 +474,24 @@ impl Board {
 
                 Ok(())
             }
+            Type::Queen => {
+                if let Ok((rank_0, file_0)) = self.check_straight_lines(move_struct, player) {
+                    self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
+                    self.pieces[rank_0][file_0] = None;
+                } else {
+                    let (rank_0, file_0) = self.check_diagonals(move_struct, player)?;
+                    self.pieces[rank][file] = self.pieces[rank_0][file_0].clone();
+                    self.pieces[rank_0][file_0] = None;
+                }
+                Ok(())
+            }
+            Type::King => {
+                let (from_rank, from_file) = self.check_surrounding_squares(move_struct, player)?;
+                self.pieces[rank][file] = self.pieces[from_rank][from_file].clone();
+                self.pieces[from_rank][from_rank] = None;
+
+                Ok(())
+            }
             _ => todo!(),
         }
     }
@@ -480,6 +501,10 @@ impl Board {
     }
 
     fn long_castle(&mut self, player: &Player) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn pawn_promotion(&mut self, player: &Player) -> Result<(), Error> {
         todo!()
     }
 
@@ -610,9 +635,39 @@ impl Board {
         }
         Err(Error::Movement("error checking knight line".to_string()))
     }
+    fn check_surrounding_squares(&mut self, move_struct: &Move, player: &Player) -> Result<(usize, usize), Error> {
+        let (rank, file) = move_struct.coordinate;
+        let target_piece = match player {
+            Player::White => Piece::White(move_struct.piece_type),
+            Player::Black => Piece::Black(move_struct.piece_type),
+        };
+
+        if move_struct.file_qualifier.is_some() {
+            panic!()
+        };
+        let range = 0..=7;
+        let offsets = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
+
+        for (file_offset, rank_offset) in offsets {
+            let search_rank: i8 = rank as i8 + rank_offset;
+            let search_file: i8 = file as i8 + file_offset;
+
+            if range.contains(&search_rank) && range.contains(&search_file) {
+                let piece = &self.pieces[search_rank as usize][search_file as usize];
+                if piece.is_none() {
+                    continue;
+                } else if piece.as_ref().unwrap() == &target_piece {
+                    return Ok((search_rank as usize, search_file as usize));
+                }
+            }
+            
+        }
+
+        Err(Error::Movement("error checking king surrounding squares".to_string()))
+    }
 }
 
-// checks that input is valid using regex
+// checks that input is valid using regex (may not be a valid move in game but is valid notiation)
 fn validate_input(usr_input: &str) -> Result<&str, Error> {
     // regex help credit https://8bitclassroom.com/2020/08/16/chess-in-regex/
     let input = usr_input.to_owned() + " ";
@@ -693,7 +748,7 @@ fn parse_input(usr_input: &str) -> Result<MoveType, Error> {
     // non pawn movement
     else if usr_input.len() == 3 {
         let mut it = usr_input.chars();
-        let piece_type: Type = it.next().unwrap().to_string().parse().unwrap();
+        let piece_type: Type = it.next().unwrap().to_string().parse()?;
 
         Ok(MoveType::Normal(Move {
             coordinate: coordinate_to_index(
@@ -731,7 +786,7 @@ fn file_to_index(file: &str) -> usize {
         "f" => 5,
         "g" => 6,
         "h" => 7,
-        _ => panic!(),
+        _ => todo!(),
     };
     y
 }
