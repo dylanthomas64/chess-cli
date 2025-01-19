@@ -4,7 +4,7 @@ use std::io;
 use std::io::Write;
 
 mod chess;
-mod board;
+//mod board;
 
 fn main() {
     //println!("♔ 	♕ 	♖ 	♗ 	♘ 	♙ 	♚ 	♛ 	♜ 	♝ 	♞ 	♟ ");
