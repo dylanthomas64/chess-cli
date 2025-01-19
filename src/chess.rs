@@ -148,9 +148,22 @@ impl Board {
         pieces.push(row8);
         Board { pieces }
     }
+    pub fn new_from_fen() -> Board {
+        todo!()
+    }
 }
 
+
 impl Board {
+    #[allow(unused)]
+    pub fn export_fen(&self) {
+        todo!()
+    }
+    #[allow(unused)]
+    pub fn export_pgn(&self) {
+        todo!()
+    }
+
     pub fn print(&self) {
         //unroll 2d vector into a 1d vector of strs
         let v: Vec<String> = self
