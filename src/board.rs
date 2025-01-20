@@ -1,4 +1,6 @@
 use std::{fmt::{self, Display}, str::FromStr};
+
+
 #[derive(PartialEq, Debug)]
 enum Colour {
     White,
@@ -87,6 +89,23 @@ struct CastlingRights {
     //black side
     k_b: bool,
     q_b: bool,
+}
+impl Display for CastlingRights {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.k_w {
+            write!(f, "K")?;
+        }
+        if self.q_w {
+            write!(f, "Q")?;
+        }
+        if self.k_b {
+            write!(f, "k")?;
+        }
+        if self.q_b {
+            write!(f, "q")?;
+        }
+        write!(f, "")
+    }
 }
 impl FromStr for CastlingRights {
     type Err = ParseError;
@@ -286,7 +305,11 @@ impl fmt::Display for Board {
 
 impl fmt::Debug for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "'{:?}' to move", self.active_colour)
+        writeln!(f, "to move: '{:?}'", self.active_colour)?;
+        writeln!(f, "castling rights: '{}'", self.castling_rights)?;
+        writeln!(f, "en passant target: '{:?}'", self.en_passant_target_square)?;
+        writeln!(f, "half-moves: '{:?}'", self.half_move_clock)?;
+        write!(f, "moves: '{:?}'", self.full_move_number)
     }
 }
 
@@ -361,11 +384,11 @@ impl FromStr for Board {
                 } else if piece.is_numeric() {
                     match piece.to_string().parse::<u8>() {
                         Ok(n) => {
-                            for i in 0..n {
+                            for _ in 0..n {
                                 board_rank_data.push(None);
                             }
                         },
-                        Err(e) => return Err(ParseError::ParseIntError)
+                        Err(_) => return Err(ParseError::ParseIntError)
                     }
                 }
             }
