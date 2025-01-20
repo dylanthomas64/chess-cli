@@ -1,5 +1,5 @@
 use std::{fmt::{self, Display}, str::FromStr};
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum Colour {
     White,
     Black,
@@ -15,6 +15,7 @@ impl FromStr for Colour {
         }
     }
 }
+#[derive(Debug, PartialEq)]
 enum PieceType {
     Pawn,
     Bishop,
@@ -72,20 +73,20 @@ impl Display for Piece {
     }
 }
 
-
+#[derive(Debug)]
 struct Move {
     colour: Colour,
     from: u8,
     destination: u8,
 }
-
+#[derive(Debug, PartialEq)]
 struct CastlingRights {
     //white side
-    K: bool,
-    Q: bool,
+    k_w: bool,
+    q_w: bool,
     //black side
-    k: bool,
-    q: bool,
+    k_b: bool,
+    q_b: bool,
 }
 impl FromStr for CastlingRights {
     type Err = ParseError;
@@ -94,20 +95,21 @@ impl FromStr for CastlingRights {
         if len > 4 {
             return Err(ParseError::ParseCastlingRightsError)
         }
-        let (mut K, mut Q, mut k, mut q) = (false, false, false, false);
+        let (mut k_w, mut q_w, mut k_b, mut q_b) = (false, false, false, false);
         for c in s.chars() {
             match c {
-               'K' => {K = true},
-               'Q' => {Q = true},
-               'k' => {k = true},
-               'q' => {k = true},
+               'K' => {k_w = true},
+               'Q' => {q_w = true},
+               'k' => {k_b = true},
+               'q' => {q_b = true},
                _ => return Err(ParseError::ParseCastlingRightsError)
             }
         }
 
-        Ok(CastlingRights{K, Q, k, q})
+        Ok(CastlingRights{k_w, q_w, k_b, q_b})
     }
 }
+#[derive(Debug)]
 enum GameState {
     Active, 
     BlackWin, 
@@ -118,7 +120,8 @@ enum GameState {
 }
 
 
-//human readable chess coordinate, than can be converted to an index to squares vector
+// human readable chess coordinate, that can be converted to an index to board.squares vector
+#[derive(Debug, PartialEq)]
 struct Coordinate {
     file: char,
     rank: u8,
@@ -218,7 +221,7 @@ impl Board {
         Board::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
 }
-impl Display for Board {
+impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
         let v: Vec<String> = self.squares.iter().map(|opt| match opt {
@@ -280,8 +283,15 @@ impl Display for Board {
         write!(f, "     A     B     C     D     E     F     G     H   \n")
     }
 }
+
+impl fmt::Debug for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{:?}' to move", self.active_colour)
+    }
+}
+
 // error types
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     ParseFenError(String),
     ParseCharError,
@@ -378,5 +388,72 @@ impl FromStr for Board {
             half_move_clock,
             full_move_number,
         })
+    }
+}
+
+
+
+/* ------- T E S T S ---------*/
+
+#[cfg(test)]
+mod conversions {
+    use super::*;
+
+    // piece tests
+    // from char
+    #[test]
+    fn piece_from_char() {
+        let piece: Piece = 'K'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::King);
+        assert_eq!(piece.colour, Colour::White);
+        let piece: Piece = 'q'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::Queen);
+        assert_eq!(piece.colour, Colour::Black);
+        let piece: Piece = 'P'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::Pawn);
+        assert_eq!(piece.colour, Colour::White);
+    }
+    #[test]
+    fn colour_from_str() {
+        assert_eq!(Colour::White, "w".parse().unwrap());
+        assert_eq!(Colour::Black, "b".parse().unwrap());
+        assert_eq!(Err(ParseError::ParseColourError), "-".parse::<Colour>());
+    }
+    #[test]
+    fn castling_rights_from_str() {
+        let from_str = CastlingRights::from_str("KQkq").unwrap();
+        let castling_rights = CastlingRights{k_w: true, q_w: true, k_b: true, q_b: true};
+        assert_eq!(from_str, castling_rights);
+
+        let from_str = CastlingRights::from_str("Qq").unwrap();
+        let castling_rights = CastlingRights{k_w: false, q_w: true, k_b: false, q_b: true};
+        assert_eq!(from_str, castling_rights);
+
+    }
+    #[test]
+    fn coord_from_str() {
+        let coord = Coordinate{file: 'a', rank: 1};
+        assert_eq!(coord, Coordinate::from_str("a1").unwrap());
+        let coord = Coordinate{file: 'h', rank: 8};
+        assert_eq!(coord, Coordinate::from_str("h8").unwrap());
+    }
+    #[test]
+    fn coord_from_u8() {
+        let coord = Coordinate{file: 'a', rank: 1};
+        let index = 0u8;
+        assert_eq!(coord, Coordinate::try_from(index).unwrap());
+
+        let coord = Coordinate{file: 'h', rank: 8};
+        let index = 63u8;
+        assert_eq!(coord, Coordinate::try_from(index).unwrap());
+    }
+    #[test]
+    fn coord_into_u8() {
+        let coord = Coordinate{file: 'a', rank: 1};
+        let index = 0u8;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate{file: 'h', rank: 8};
+        let index = 63u8;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
     }
 }
