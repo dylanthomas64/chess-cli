@@ -101,6 +101,12 @@ pub struct Board2 {
     map: HashMap<Option<Piece>>
 } */
 
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Board {
     pub fn new() -> Board {
         let mut pieces: Vec<Vec<Option<Piece>>> = Vec::new();
@@ -148,11 +154,11 @@ impl Board {
         pieces.push(row8);
         Board { pieces }
     }
+    // position startpos == rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
     pub fn new_from_fen() -> Board {
         todo!()
     }
 }
-
 
 impl Board {
     #[allow(unused)]
@@ -648,7 +654,11 @@ impl Board {
         }
         Err(Error::Movement("error checking knight line".to_string()))
     }
-    fn check_surrounding_squares(&mut self, move_struct: &Move, player: &Player) -> Result<(usize, usize), Error> {
+    fn check_surrounding_squares(
+        &mut self,
+        move_struct: &Move,
+        player: &Player,
+    ) -> Result<(usize, usize), Error> {
         let (rank, file) = move_struct.coordinate;
         let target_piece = match player {
             Player::White => Piece::White(move_struct.piece_type),
@@ -659,7 +669,16 @@ impl Board {
             panic!()
         };
         let range = 0..=7;
-        let offsets = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)];
+        let offsets = [
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (1, -1),
+            (0, -1),
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+        ];
 
         for (file_offset, rank_offset) in offsets {
             let search_rank: i8 = rank as i8 + rank_offset;
@@ -673,10 +692,11 @@ impl Board {
                     return Ok((search_rank as usize, search_file as usize));
                 }
             }
-            
         }
 
-        Err(Error::Movement("error checking king surrounding squares".to_string()))
+        Err(Error::Movement(
+            "error checking king surrounding squares".to_string(),
+        ))
     }
 }
 

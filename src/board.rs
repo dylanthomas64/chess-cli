@@ -1,7 +1,9 @@
-use std::{fmt::{self, Display}, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
-
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 enum Colour {
     White,
     Black,
@@ -13,11 +15,11 @@ impl FromStr for Colour {
         match s {
             "w" => Ok(Colour::White),
             "b" => Ok(Colour::Black),
-            _ => Err(ParseError::ParseColourError)
+            _ => Err(ParseError::ColourError),
         }
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum PieceType {
     Pawn,
     Bishop,
@@ -26,11 +28,11 @@ enum PieceType {
     Queen,
     King,
 }
+#[derive(Clone, Debug)]
 struct Piece {
     piece_type: PieceType,
     colour: Colour,
 }
-
 
 impl TryFrom<char> for Piece {
     type Error = ParseError;
@@ -42,19 +44,16 @@ impl TryFrom<char> for Piece {
             'r' => PieceType::Rook,
             'q' => PieceType::Queen,
             'k' => PieceType::King,
-            _ => return Err(ParseError::ParseCharError)
+            _ => return Err(ParseError::CharError),
         };
         let colour = if c.is_ascii_uppercase() {
             Colour::White
         } else {
             Colour::Black
         };
-        Ok(Piece {
-            piece_type, colour
-        })
+        Ok(Piece { piece_type, colour })
     }
 }
-
 
 impl Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -71,15 +70,26 @@ impl Display for Piece {
         } else {
             write!(f, "{}", p)
         }
-        
     }
 }
 
 #[derive(Debug)]
-struct Move {
-    colour: Colour,
-    from: u8,
-    destination: u8,
+pub struct Move {
+    from: Coordinate,
+    destination: Coordinate,
+}
+
+impl FromStr for Move {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 4 {
+            Err(ParseError::MoveError)
+        } else {
+            let from = Coordinate::from_str(&s[0..2])?;
+            let destination = Coordinate::from_str(&s[2..4])?;
+            Ok(Move { from, destination })
+        }
+    }
 }
 #[derive(Debug, PartialEq)]
 struct CastlingRights {
@@ -112,38 +122,38 @@ impl FromStr for CastlingRights {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let len = s.chars().count();
         if len > 4 {
-            return Err(ParseError::ParseCastlingRightsError)
+            return Err(ParseError::CastlingRightsError);
         }
         let (mut k_w, mut q_w, mut k_b, mut q_b) = (false, false, false, false);
         for c in s.chars() {
             match c {
-               'K' => {k_w = true},
-               'Q' => {q_w = true},
-               'k' => {k_b = true},
-               'q' => {q_b = true},
-               _ => return Err(ParseError::ParseCastlingRightsError)
+                'K' => k_w = true,
+                'Q' => q_w = true,
+                'k' => k_b = true,
+                'q' => q_b = true,
+                _ => return Err(ParseError::CastlingRightsError),
             }
         }
 
-        Ok(CastlingRights{k_w, q_w, k_b, q_b})
+        Ok(CastlingRights { k_w, q_w, k_b, q_b })
     }
 }
 #[derive(Debug)]
+#[allow(unused)]
 enum GameState {
-    Active, 
-    BlackWin, 
-    WhiteWin, 
-    Forfeit, 
-    Stalemate, 
-    Resignation, 
+    Active,
+    BlackWin,
+    WhiteWin,
+    Forfeit,
+    Stalemate,
+    Resignation,
 }
-
 
 // human readable chess coordinate, that can be converted to an index to board.squares vector
 #[derive(Debug, PartialEq)]
 struct Coordinate {
     file: char,
-    rank: u8,
+    rank: usize,
 }
 impl Display for Coordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -155,34 +165,39 @@ impl FromStr for Coordinate {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut chars = s.chars();
         let file: char;
-        let rank: u8;
+        let rank: usize;
         let possible_files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-        if &chars.clone().count() == &2usize {
+        if chars.clone().count() == 2usize {
             file = chars.next().unwrap();
-            rank = match chars.next().unwrap().to_string().to_string().parse::<u8>() {
+            rank = match chars.next().unwrap().to_string().parse::<usize>() {
                 Ok(rank) => rank,
-                Err(_) => return Err(ParseError::ParseIntError)
+                Err(_) => return Err(ParseError::IntError),
             };
             for c in possible_files {
                 if c == file {
                     if (1..=8).contains(&rank) {
-                        return Ok(Coordinate{file, rank})
+                        return Ok(Coordinate { file, rank });
                     } else {
-                        return Err(ParseError::ParseCoordinateError("file not in range 1..=8".to_string()))
+                        return Err(ParseError::CoordinateError(
+                            "file not in range 1..=8".to_string(),
+                        ));
                     }
                 }
             }
-            return Err(ParseError::ParseCoordinateError("file not in range a-h".to_string()))
-            
+            return Err(ParseError::CoordinateError(
+                "file not in range a-h".to_string(),
+            ));
         }
-        Err(ParseError::ParseCoordinateError("requires exactly 2 chars eg. a1".to_string()))
+        Err(ParseError::CoordinateError(
+            "requires exactly 2 chars eg. a1".to_string(),
+        ))
     }
 }
 
-impl TryInto<u8> for Coordinate {
+impl TryInto<usize> for Coordinate {
     type Error = ParseError;
-    fn try_into(self) -> Result<u8, Self::Error> {
-        let file: u8 = match self.file {
+    fn try_into(self) -> Result<usize, Self::Error> {
+        let file: usize = match self.file {
             'a' => 0,
             'b' => 1,
             'c' => 2,
@@ -191,17 +206,16 @@ impl TryInto<u8> for Coordinate {
             'f' => 5,
             'g' => 6,
             'h' => 7,
-            _ => panic!()
+            _ => panic!(),
         };
-        let rank: u8 = self.rank - 1;
-        return Ok((8*file) + rank)
+        let rank: usize = self.rank - 1;
+        Ok(file + (8 * rank))
     }
 }
 
-impl TryFrom<u8> for Coordinate {
+impl TryFrom<usize> for Coordinate {
     type Error = ParseError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
         let file = match value % 8 {
             0 => 'a',
             1 => 'b',
@@ -211,11 +225,10 @@ impl TryFrom<u8> for Coordinate {
             5 => 'f',
             6 => 'g',
             7 => 'h',
-            _ => panic!()
+            _ => panic!(),
         };
         let rank = (value / 8) + 1;
-        return Ok(Coordinate{file, rank})
-        
+        Ok(Coordinate { file, rank })
     }
 }
 
@@ -227,7 +240,7 @@ pub struct Board {
     castling_rights: CastlingRights,
     en_passant_target_square: Option<Coordinate>,
     // required for 50 move rule
-    half_move_clock: u8,
+    half_move_clock: usize,
     // starts at 1 and increments after black's move
     full_move_number: usize,
 }
@@ -239,15 +252,28 @@ impl Board {
     pub fn default() -> Board {
         Board::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
+    pub fn process_move(&mut self, mv: Move) -> Result<(), ParseError> {
+        let i0: usize = mv.from.try_into()?;
+        let i: usize = mv.destination.try_into()?;
+        if let Some(piece) = &self.squares[i0] {
+            self.squares[i] = Some(piece.clone());
+            self.squares[i0] = None;
+            Ok(())
+        } else {
+            panic!()
+        }
+    }
 }
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-
-        let v: Vec<String> = self.squares.iter().map(|opt| match opt {
-            Some(piece) => format!("{}", piece),
-            None => " ".to_string(),
-        })
-        .collect();
+        let v: Vec<String> = self
+            .squares
+            .iter()
+            .map(|opt| match opt {
+                Some(piece) => format!("{}", piece),
+                None => " ".to_string(),
+            })
+            .collect();
 
         let row1 = format!(
             "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
@@ -281,25 +307,25 @@ impl fmt::Display for Board {
             "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
             v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
         );
-        
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row8)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row7)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row6)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row5)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row4)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row3)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row2)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "{}\n", row1)?;
-        write!(f, "  —------------------------------------------------\n")?;
-        write!(f, "     A     B     C     D     E     F     G     H   \n")
+
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row8)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row7)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row6)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row5)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row4)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row3)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row2)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row1)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "     A     B     C     D     E     F     G     H   ")
     }
 }
 
@@ -307,7 +333,11 @@ impl fmt::Debug for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "to move: '{:?}'", self.active_colour)?;
         writeln!(f, "castling rights: '{}'", self.castling_rights)?;
-        writeln!(f, "en passant target: '{:?}'", self.en_passant_target_square)?;
+        writeln!(
+            f,
+            "en passant target: '{:?}'",
+            self.en_passant_target_square
+        )?;
         writeln!(f, "half-moves: '{:?}'", self.half_move_clock)?;
         write!(f, "moves: '{:?}'", self.full_move_number)
     }
@@ -316,12 +346,13 @@ impl fmt::Debug for Board {
 // error types
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
-    ParseFenError(String),
-    ParseCharError,
-    ParseIntError,
-    ParseColourError,
-    ParseCastlingRightsError,
-    ParseCoordinateError(String),
+    FenError(String),
+    CharError,
+    IntError,
+    ColourError,
+    CastlingRightsError,
+    CoordinateError(String),
+    MoveError,
 }
 
 impl FromStr for Board {
@@ -333,42 +364,60 @@ impl FromStr for Board {
         let mut fen_it = s.split_ascii_whitespace();
         let fen_piece_data = match fen_it.next() {
             Some(str) => str,
-            None => return Err(ParseError::ParseFenError("no piece data found".to_string()))
+            None => return Err(ParseError::FenError("no piece data found".to_string())),
         };
 
         let active_colour = match fen_it.next() {
             Some(str) => str.parse::<Colour>()?,
-            None => return Err(ParseError::ParseFenError("no colour data found".to_string()))
+            None => return Err(ParseError::FenError("no colour data found".to_string())),
         };
         let castling_rights = match fen_it.next() {
             Some(str) => str.parse::<CastlingRights>()?,
-            None => return Err(ParseError::ParseFenError("no castling rights data found".to_string()))
+            None => {
+                return Err(ParseError::FenError(
+                    "no castling rights data found".to_string(),
+                ))
+            }
         };
         let en_passant_target_square = match fen_it.next() {
-            Some(str) => { if str == '-'.to_string() {
-                None
-            } else {
-                Some(str.parse::<Coordinate>().unwrap())
+            Some(str) => {
+                if str == '-'.to_string() {
+                    None
+                } else {
+                    Some(str.parse::<Coordinate>().unwrap())
+                }
             }
-                
-            },
-            None => return Err(ParseError::ParseFenError("no en passant target data found".to_string()))
+            None => {
+                return Err(ParseError::FenError(
+                    "no en passant target data found".to_string(),
+                ))
+            }
         };
         let half_move_clock = match fen_it.next() {
-            Some(str) => str.parse::<u8>().unwrap(),
-            None => return Err(ParseError::ParseFenError("no half move clock data found".to_string()))
+            Some(str) => str.parse::<usize>().unwrap(),
+            None => {
+                return Err(ParseError::FenError(
+                    "no half move clock data found".to_string(),
+                ))
+            }
         };
         let full_move_number = match fen_it.next() {
             Some(str) => str.parse::<usize>().unwrap(),
-            None => return Err(ParseError::ParseFenError("no full move number data found".to_string()))
+            None => {
+                return Err(ParseError::FenError(
+                    "no full move number data found".to_string(),
+                ))
+            }
         };
 
         // check that the fen iterator has been exhausted
         let extra_args = fen_it.next();
         if extra_args.is_some() {
-            return Err(ParseError::ParseFenError(format!("too many arguments! Extra args found: {}", extra_args.unwrap())))
+            return Err(ParseError::FenError(format!(
+                "too many arguments! Extra args found: {}",
+                extra_args.unwrap()
+            )));
         }
-        
 
         // Parse pieces
 
@@ -382,26 +431,27 @@ impl FromStr for Board {
                 if piece.is_alphabetic() {
                     board_rank_data.push(Some(Piece::try_from(piece)?));
                 } else if piece.is_numeric() {
-                    match piece.to_string().parse::<u8>() {
+                    match piece.to_string().parse::<usize>() {
                         Ok(n) => {
                             for _ in 0..n {
                                 board_rank_data.push(None);
                             }
-                        },
-                        Err(_) => return Err(ParseError::ParseIntError)
+                        }
+                        Err(_) => return Err(ParseError::IntError),
                     }
                 }
             }
             if board_rank_data.len() != 8 {
-                return Err(ParseError::ParseFenError(format!("rank length must equal 8. Current rank == {}", rank)))
+                return Err(ParseError::FenError(format!(
+                    "rank length must equal 8. Current rank == {}",
+                    rank
+                )));
             } else {
                 squares.append(&mut board_rank_data)
             }
         }
 
         // parse everything else
-
-
 
         Ok(Board {
             squares,
@@ -413,8 +463,6 @@ impl FromStr for Board {
         })
     }
 }
-
-
 
 /* ------- T E S T S ---------*/
 
@@ -440,43 +488,58 @@ mod conversions {
     fn colour_from_str() {
         assert_eq!(Colour::White, "w".parse().unwrap());
         assert_eq!(Colour::Black, "b".parse().unwrap());
-        assert_eq!(Err(ParseError::ParseColourError), "-".parse::<Colour>());
+        assert_eq!(Err(ParseError::ColourError), "-".parse::<Colour>());
     }
     #[test]
     fn castling_rights_from_str() {
         let from_str = CastlingRights::from_str("KQkq").unwrap();
-        let castling_rights = CastlingRights{k_w: true, q_w: true, k_b: true, q_b: true};
+        let castling_rights = CastlingRights {
+            k_w: true,
+            q_w: true,
+            k_b: true,
+            q_b: true,
+        };
         assert_eq!(from_str, castling_rights);
 
         let from_str = CastlingRights::from_str("Qq").unwrap();
-        let castling_rights = CastlingRights{k_w: false, q_w: true, k_b: false, q_b: true};
+        let castling_rights = CastlingRights {
+            k_w: false,
+            q_w: true,
+            k_b: false,
+            q_b: true,
+        };
         assert_eq!(from_str, castling_rights);
-
     }
     #[test]
     fn coord_from_str() {
-        let coord = Coordinate{file: 'a', rank: 1};
+        let coord = Coordinate { file: 'a', rank: 1 };
         assert_eq!(coord, Coordinate::from_str("a1").unwrap());
-        let coord = Coordinate{file: 'h', rank: 8};
+        let coord = Coordinate { file: 'h', rank: 8 };
         assert_eq!(coord, Coordinate::from_str("h8").unwrap());
     }
     #[test]
-    fn coord_from_u8() {
-        let coord = Coordinate{file: 'a', rank: 1};
-        let index = 0u8;
+    fn coord_from_usize() {
+        let coord = Coordinate { file: 'a', rank: 1 };
+        let index = 0usize;
         assert_eq!(coord, Coordinate::try_from(index).unwrap());
 
-        let coord = Coordinate{file: 'h', rank: 8};
-        let index = 63u8;
+        let coord = Coordinate { file: 'h', rank: 8 };
+        let index = 63usize;
         assert_eq!(coord, Coordinate::try_from(index).unwrap());
     }
     #[test]
-    fn coord_into_u8() {
-        let coord = Coordinate{file: 'a', rank: 1};
-        let index = 0u8;
+    fn coord_into_usize() {
+        let coord = Coordinate { file: 'a', rank: 1 };
+        let index = 0usize;
         assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate{file: 'h', rank: 8};
-        let index = 63u8;
+        let coord = Coordinate { file: 'h', rank: 8 };
+        let index = 63usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate { file: 'b', rank: 1 };
+        let index = 1usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate { file: 'b', rank: 2 };
+        let index = 9usize;
         assert_eq!(index, Coordinate::try_into(coord).unwrap());
     }
 }
