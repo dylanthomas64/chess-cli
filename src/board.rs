@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display},
+    num::ParseIntError,
     str::FromStr,
 };
 
@@ -10,12 +11,12 @@ enum Colour {
 }
 
 impl FromStr for Colour {
-    type Err = ParseError;
+    type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "w" => Ok(Colour::White),
             "b" => Ok(Colour::Black),
-            _ => Err(ParseError::ColourError),
+            _ => Err(BoardError::ColourError),
         }
     }
 }
@@ -35,8 +36,8 @@ struct Piece {
 }
 
 impl TryFrom<char> for Piece {
-    type Error = ParseError;
-    fn try_from(c: char) -> Result<Self, ParseError> {
+    type Error = BoardError;
+    fn try_from(c: char) -> Result<Self, BoardError> {
         let piece_type = match &c.to_ascii_lowercase() {
             'p' => PieceType::Pawn,
             'b' => PieceType::Bishop,
@@ -44,7 +45,7 @@ impl TryFrom<char> for Piece {
             'r' => PieceType::Rook,
             'q' => PieceType::Queen,
             'k' => PieceType::King,
-            _ => return Err(ParseError::CharError),
+            _ => return Err(BoardError::PieceError),
         };
         let colour = if c.is_ascii_uppercase() {
             Colour::White
@@ -66,10 +67,12 @@ impl Display for Piece {
             PieceType::King => "k",
         };
         if self.colour == Colour::White {
-            write!(f, "{}", p.to_ascii_uppercase())
+            write!(f, "\x1B[36m{}", p.to_ascii_uppercase())?;
         } else {
-            write!(f, "{}", p)
+            write!(f, "\x1B[31m{}", p)?;
         }
+        // rest to default colour (black)
+        write!(f, "\x1B[30m")
     }
 }
 
@@ -77,18 +80,42 @@ impl Display for Piece {
 pub struct Move {
     from: Coordinate,
     destination: Coordinate,
+    // eg. for e7e8q
+    promotion: Option<PieceType>,
 }
 
 impl FromStr for Move {
-    type Err = ParseError;
+    type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 4 {
-            Err(ParseError::MoveError)
-        } else {
+        if s.len() == 4 {
             let from = Coordinate::from_str(&s[0..2])?;
             let destination = Coordinate::from_str(&s[2..4])?;
-            Ok(Move { from, destination })
+            Ok(Move {
+                from,
+                destination,
+                promotion: None,
+            })
+        } else if s.len() == 5 {
+            let from = Coordinate::from_str(&s[0..2])?;
+            let destination = Coordinate::from_str(&s[2..4])?;
+            let promotion = Some(
+                Piece::try_from(s[4..5].chars().next().ok_or(BoardError::PromotionError)?)?
+                    .piece_type,
+            );
+            Ok(Move {
+                from,
+                destination,
+                promotion,
+            })
+        } else {
+            Err(BoardError::MoveError)
         }
+    }
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.from, self.destination)
     }
 }
 #[derive(Debug, PartialEq)]
@@ -118,11 +145,11 @@ impl Display for CastlingRights {
     }
 }
 impl FromStr for CastlingRights {
-    type Err = ParseError;
+    type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let len = s.chars().count();
         if len > 4 {
-            return Err(ParseError::CastlingRightsError);
+            return Err(BoardError::CastlingRightsError);
         }
         let (mut k_w, mut q_w, mut k_b, mut q_b) = (false, false, false, false);
         for c in s.chars() {
@@ -131,7 +158,7 @@ impl FromStr for CastlingRights {
                 'Q' => q_w = true,
                 'k' => k_b = true,
                 'q' => q_b = true,
-                _ => return Err(ParseError::CastlingRightsError),
+                _ => return Err(BoardError::CastlingRightsError),
             }
         }
 
@@ -161,7 +188,7 @@ impl Display for Coordinate {
     }
 }
 impl FromStr for Coordinate {
-    type Err = ParseError;
+    type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut chars = s.chars();
         let file: char;
@@ -169,33 +196,30 @@ impl FromStr for Coordinate {
         let possible_files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         if chars.clone().count() == 2usize {
             file = chars.next().unwrap();
-            rank = match chars.next().unwrap().to_string().parse::<usize>() {
-                Ok(rank) => rank,
-                Err(_) => return Err(ParseError::IntError),
-            };
+            rank = chars.next().unwrap().to_string().parse::<usize>()?;
             for c in possible_files {
                 if c == file {
                     if (1..=8).contains(&rank) {
                         return Ok(Coordinate { file, rank });
                     } else {
-                        return Err(ParseError::CoordinateError(
-                            "file not in range 1..=8".to_string(),
+                        return Err(BoardError::CoordinateError(
+                            "rank not in range 1..=8".to_string(),
                         ));
                     }
                 }
             }
-            return Err(ParseError::CoordinateError(
+            return Err(BoardError::CoordinateError(
                 "file not in range a-h".to_string(),
             ));
         }
-        Err(ParseError::CoordinateError(
-            "requires exactly 2 chars eg. a1".to_string(),
+        Err(BoardError::CoordinateError(
+            "must contain exactly 2 chars (promotion not implemented...)".to_string(),
         ))
     }
 }
 
 impl TryInto<usize> for Coordinate {
-    type Error = ParseError;
+    type Error = BoardError;
     fn try_into(self) -> Result<usize, Self::Error> {
         let file: usize = match self.file {
             'a' => 0,
@@ -214,7 +238,7 @@ impl TryInto<usize> for Coordinate {
 }
 
 impl TryFrom<usize> for Coordinate {
-    type Error = ParseError;
+    type Error = BoardError;
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         let file = match value % 8 {
             0 => 'a',
@@ -244,26 +268,6 @@ pub struct Board {
     // starts at 1 and increments after black's move
     full_move_number: usize,
 }
-
-impl Board {
-    pub fn new(fen: String) -> Result<Board, ParseError> {
-        Board::from_str(&fen)
-    }
-    pub fn default() -> Board {
-        Board::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
-    }
-    pub fn process_move(&mut self, mv: Move) -> Result<(), ParseError> {
-        let i0: usize = mv.from.try_into()?;
-        let i: usize = mv.destination.try_into()?;
-        if let Some(piece) = &self.squares[i0] {
-            self.squares[i] = Some(piece.clone());
-            self.squares[i0] = None;
-            Ok(())
-        } else {
-            panic!()
-        }
-    }
-}
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let v: Vec<String> = self
@@ -274,7 +278,6 @@ impl fmt::Display for Board {
                 None => " ".to_string(),
             })
             .collect();
-
         let row1 = format!(
             "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
             v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
@@ -307,7 +310,8 @@ impl fmt::Display for Board {
             "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
             v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
         );
-
+        // set background colour
+        //write!(f, "\x1B[106m")?;
         writeln!(f, "  —------------------------------------------------")?;
         writeln!(f, "{}", row8)?;
         writeln!(f, "  —------------------------------------------------")?;
@@ -342,21 +346,78 @@ impl fmt::Debug for Board {
         write!(f, "moves: '{:?}'", self.full_move_number)
     }
 }
+impl Board {
+    pub fn new(fen: String) -> Result<Board, BoardError> {
+        Self::from_str(&fen)
+    }
+    pub fn startpos() -> Board {
+        Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
+    }
+    pub fn process_move(&mut self, mv: Move) -> Result<(), BoardError> {
+        let i0: usize = mv.from.try_into()?;
+        let i: usize = mv.destination.try_into()?;
+        //Self::validate_move(i0, i);
+        if let Some(piece) = &self.squares[i0] {
+            self.squares[i] = Some(piece.clone());
+            self.squares[i0] = None;
+            // change active colour
+            // change castling rights
+            // change en passant sq
+            // change half-move clock
+            // change full-move number
+            Ok(())
+        } else {
+            Err(BoardError::InvalidMove("piece does not exist".to_string()))
+        }
+    }
+    fn validate_move(mv: Move) -> Result<(), BoardError> {
+        todo!()
+    }
+}
 
 // error types
 #[derive(Debug, PartialEq)]
-pub enum ParseError {
+pub enum BoardError {
     FenError(String),
-    CharError,
-    IntError,
+    PieceError,
+    ParseInt(std::num::ParseIntError),
     ColourError,
     CastlingRightsError,
     CoordinateError(String),
     MoveError,
+    PromotionError,
+    InvalidMove(String),
+    PgnError,
+    UciError,
 }
 
+impl From<ParseIntError> for BoardError {
+    fn from(value: ParseIntError) -> Self {
+        BoardError::ParseInt(value)
+    }
+}
+impl Display for BoardError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let error_msg: &str = match self {
+            Self::FenError(s) => s,
+            Self::PieceError => "error creating piece",
+            Self::ParseInt(e) => &format!("parse int error: {}", e),
+            Self::ColourError => "error creating colour",
+            Self::CastlingRightsError => "error creating castling rights",
+            Self::CoordinateError(s) => &format!("error creating coordinate: {}", s),
+            Self::MoveError => "error creating move",
+            Self::PromotionError => "error trying to promote",
+            Self::InvalidMove(s) => &format!("invalid move: {}", s),
+            Self::PgnError => "error pgn",
+            Self::UciError => "error uci",
+        };
+        write!(f, "{}", error_msg)
+    }
+}
+impl std::error::Error for BoardError {}
+
 impl FromStr for Board {
-    type Err = ParseError;
+    type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // accept only valid fen strings and return a board
         // startpos = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
@@ -364,17 +425,17 @@ impl FromStr for Board {
         let mut fen_it = s.split_ascii_whitespace();
         let fen_piece_data = match fen_it.next() {
             Some(str) => str,
-            None => return Err(ParseError::FenError("no piece data found".to_string())),
+            None => return Err(BoardError::FenError("no piece data found".to_string())),
         };
 
         let active_colour = match fen_it.next() {
             Some(str) => str.parse::<Colour>()?,
-            None => return Err(ParseError::FenError("no colour data found".to_string())),
+            None => return Err(BoardError::FenError("no colour data found".to_string())),
         };
         let castling_rights = match fen_it.next() {
             Some(str) => str.parse::<CastlingRights>()?,
             None => {
-                return Err(ParseError::FenError(
+                return Err(BoardError::FenError(
                     "no castling rights data found".to_string(),
                 ))
             }
@@ -388,7 +449,7 @@ impl FromStr for Board {
                 }
             }
             None => {
-                return Err(ParseError::FenError(
+                return Err(BoardError::FenError(
                     "no en passant target data found".to_string(),
                 ))
             }
@@ -396,7 +457,7 @@ impl FromStr for Board {
         let half_move_clock = match fen_it.next() {
             Some(str) => str.parse::<usize>().unwrap(),
             None => {
-                return Err(ParseError::FenError(
+                return Err(BoardError::FenError(
                     "no half move clock data found".to_string(),
                 ))
             }
@@ -404,7 +465,7 @@ impl FromStr for Board {
         let full_move_number = match fen_it.next() {
             Some(str) => str.parse::<usize>().unwrap(),
             None => {
-                return Err(ParseError::FenError(
+                return Err(BoardError::FenError(
                     "no full move number data found".to_string(),
                 ))
             }
@@ -413,13 +474,13 @@ impl FromStr for Board {
         // check that the fen iterator has been exhausted
         let extra_args = fen_it.next();
         if extra_args.is_some() {
-            return Err(ParseError::FenError(format!(
+            return Err(BoardError::FenError(format!(
                 "too many arguments! Extra args found: {}",
                 extra_args.unwrap()
             )));
         }
 
-        // Parse pieces
+        // Board pieces
 
         let mut squares: Vec<Option<Piece>> = Vec::new();
         // reverse iterator to fill pieces in correct order (rank 1 to rank 8)
@@ -431,18 +492,14 @@ impl FromStr for Board {
                 if piece.is_alphabetic() {
                     board_rank_data.push(Some(Piece::try_from(piece)?));
                 } else if piece.is_numeric() {
-                    match piece.to_string().parse::<usize>() {
-                        Ok(n) => {
-                            for _ in 0..n {
-                                board_rank_data.push(None);
-                            }
-                        }
-                        Err(_) => return Err(ParseError::IntError),
+                    let n = piece.to_string().parse::<usize>()?;
+                    for _ in 0..n {
+                        board_rank_data.push(None);
                     }
                 }
             }
             if board_rank_data.len() != 8 {
-                return Err(ParseError::FenError(format!(
+                return Err(BoardError::FenError(format!(
                     "rank length must equal 8. Current rank == {}",
                     rank
                 )));
@@ -488,7 +545,7 @@ mod conversions {
     fn colour_from_str() {
         assert_eq!(Colour::White, "w".parse().unwrap());
         assert_eq!(Colour::Black, "b".parse().unwrap());
-        assert_eq!(Err(ParseError::ColourError), "-".parse::<Colour>());
+        assert_eq!(Err(BoardError::ColourError), "-".parse::<Colour>());
     }
     #[test]
     fn castling_rights_from_str() {

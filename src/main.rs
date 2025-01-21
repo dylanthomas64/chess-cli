@@ -1,16 +1,27 @@
 use std::str::FromStr;
+
+use board::BoardError;
 mod board;
 
 fn main() {
-    let mut board = board::Board::new(
-        "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2".to_string(),
-    )
-    .unwrap();
+    let result = run();
+    match result {
+        Ok(_) => println!("finished!"),
+        Err(e) => eprintln!("{}", e)
+    }
+    println!("exiting...")
+}
+
+fn run() -> Result<(), board::BoardError> {
+    let mut board = board::Board::startpos();
     println!("{}", board);
 
-    let mv = board::Move::from_str("b8c6").unwrap();
-    println!("{:?}", mv);
-    board.process_move(mv).unwrap();
-    println!("{}", board);
+    let move_vec = vec!["e2e4", "e7e5", "g1f3", "d7d6", "d2d4", "c8g4", "d4e5"];
+    for mv_str in move_vec {
+        let mv = board::Move::from_str(&mv_str)?;
+        board.process_move(mv)?;
+        println!("{}", board);
+    };
     println!("{:?}", board);
+    Ok(())
 }

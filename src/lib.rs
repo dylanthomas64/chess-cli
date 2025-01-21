@@ -1,3 +1,4 @@
+/*
 use regex::Regex;
 use std::fmt;
 use std::str::FromStr;
@@ -511,7 +512,6 @@ impl Board {
 
                 Ok(())
             }
-            _ => todo!(),
         }
     }
 
@@ -823,3 +823,6 @@ fn file_to_index(file: &str) -> usize {
     };
     y
 }
+
+
+*/
