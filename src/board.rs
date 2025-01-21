@@ -67,10 +67,12 @@ impl Display for Piece {
             PieceType::King => "k",
         };
         if self.colour == Colour::White {
-            write!(f, "{}", p.to_ascii_uppercase())
+            write!(f, "\x1B[36m{}", p.to_ascii_uppercase())?;
         } else {
-            write!(f, "{}", p)
+            write!(f, "\x1B[31m{}", p)?;
         }
+        // rest to default colour (black)
+        write!(f, "\x1B[30m")
     }
 }
 
@@ -276,7 +278,6 @@ impl fmt::Display for Board {
                 None => " ".to_string(),
             })
             .collect();
-
         let row1 = format!(
             "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
             v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
@@ -309,7 +310,8 @@ impl fmt::Display for Board {
             "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
             v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
         );
-
+        // set background colour
+        //write!(f, "\x1B[106m")?;
         writeln!(f, "  —------------------------------------------------")?;
         writeln!(f, "{}", row8)?;
         writeln!(f, "  —------------------------------------------------")?;
