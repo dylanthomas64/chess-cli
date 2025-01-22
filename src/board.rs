@@ -1,5 +1,5 @@
 use std::{
-    fmt::{self, Display},
+    fmt::{self, Display, Write},
     num::ParseIntError,
     str::FromStr,
 };
@@ -67,9 +67,9 @@ impl TryFrom<char> for Piece {
     }
 }
 
-impl Into<char> for Piece {
-    fn into(self) -> char {
-        let piece_type = match self.piece_type {
+impl From<Piece> for char {
+    fn from(value: Piece) -> Self {
+        let piece_type = match value.piece_type {
             PieceType::Pawn => 'p',
             PieceType::Bishop => 'b',
             PieceType::Knight => 'n',
@@ -77,9 +77,9 @@ impl Into<char> for Piece {
             PieceType::Queen => 'q',
             PieceType::King => 'k',
         };
-        match self.colour {
-            Colour::White => return piece_type.to_ascii_uppercase(),
-            Colour::Black => return piece_type,
+        match value.colour {
+            Colour::White => piece_type.to_ascii_uppercase(),
+            Colour::Black => piece_type,
         }
     }
 }
@@ -387,7 +387,7 @@ impl Board {
         let i: usize = mv.destination.try_into()?;
         //Self::validate_move(i0, i);
         if let Some(piece) = &self.squares[i0] {
-            self.squares[i] = Some(piece.clone());
+            self.squares[i] = Some(*(piece));
             self.squares[i0] = None;
             // change active colour
             // change castling rights
@@ -428,12 +428,24 @@ impl Board {
             }
             piece_data.push(rank_str);
         }
+
         let mut state: String = piece_data
-            .into_iter()
+            .iter()
             .rev()
-            .map(|s| format!("{}/", s))
-            .collect();
-        state = state.strip_suffix('/').unwrap().to_string();
+            .fold(String::new(), |mut output, x| {
+                let _ = write!(output, "{x}/");
+                output
+            })
+            .strip_suffix('/')
+            .unwrap()
+            .to_string();
+
+        // let mut state: String = piece_data
+        //     .into_iter()
+        //     .rev()
+        //     .map(|s| format!("{}/", s))
+        //     .collect();
+        // state = state.strip_suffix('/').unwrap().to_string();
 
         let en_passant = match &self.en_passant_target_square {
             Some(coord) => coord.to_string(),
@@ -448,7 +460,7 @@ impl Board {
             self.half_move_clock,
             self.full_move_number
         );
-        return Ok(fen_output);
+        Ok(fen_output)
     }
 }
 

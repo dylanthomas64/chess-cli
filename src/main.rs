@@ -16,7 +16,7 @@ fn run() -> Result<(), board::BoardError> {
 
     let move_vec = vec!["e2e4", "e7e5", "g1f3", "d7d6", "d2d4", "c8g4", "d4e5"];
     for mv_str in move_vec {
-        let mv = board::Move::from_str(&mv_str)?;
+        let mv = board::Move::from_str(mv_str)?;
         board.process_move(mv)?;
         println!("{}", board);
     }
