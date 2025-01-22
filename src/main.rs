@@ -19,7 +19,7 @@ fn run() -> Result<(), BoardError> {
     let mut board = Board::startpos();
     println!("{}", board);
 
-    let move_vec = vec!["e2e4", "e7e5", "g1f3", "d7d6", "d2d4", "c8g4", "d4e5"];
+    let move_vec = vec!["e2e3"];
     for mv_str in move_vec {
         let mv = Move::from_str(mv_str)?;
         board.process_move(mv)?;

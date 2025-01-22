@@ -14,7 +14,9 @@ pub enum BoardError {
     CoordinateError(String),
     MoveError,
     PromotionError,
-    InvalidMove(String),
+    InvalidMove,
+    NoLegalMoves,
+    EmptySquare,
     PgnError,
     UciError,
 }
@@ -35,7 +37,9 @@ impl Display for BoardError {
             Self::CoordinateError(s) => &format!("error creating coordinate: {}", s),
             Self::MoveError => "error creating move",
             Self::PromotionError => "error trying to promote",
-            Self::InvalidMove(s) => &format!("invalid move: {}", s),
+            Self::InvalidMove => "error invalid move",
+            Self::NoLegalMoves => "no possible legal moves from start square",
+            Self::EmptySquare => "start square is empty",
             Self::PgnError => "error pgn",
             Self::UciError => "error uci",
         };
