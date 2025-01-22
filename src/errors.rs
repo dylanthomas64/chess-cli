@@ -6,6 +6,7 @@ use std::{
 // error types
 #[derive(Debug, PartialEq)]
 pub enum BoardError {
+    //creation errors
     FenError(String),
     PieceError,
     ParseInt(std::num::ParseIntError),
@@ -14,8 +15,10 @@ pub enum BoardError {
     CoordinateError(String),
     MoveError,
     PromotionError,
+    // logic errors
     InvalidMove,
     NoLegalMoves,
+    WrongColour,
     EmptySquare,
     PgnError,
     UciError,
@@ -37,8 +40,10 @@ impl Display for BoardError {
             Self::CoordinateError(s) => &format!("error creating coordinate: {}", s),
             Self::MoveError => "error creating move",
             Self::PromotionError => "error trying to promote",
+            // logic
             Self::InvalidMove => "error invalid move",
             Self::NoLegalMoves => "no possible legal moves from start square",
+            Self::WrongColour => "can't move opponents piece!",
             Self::EmptySquare => "start square is empty",
             Self::PgnError => "error pgn",
             Self::UciError => "error uci",

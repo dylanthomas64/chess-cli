@@ -7,7 +7,7 @@ use crate::errors::BoardError;
 use crate::piece::{Colour, Piece, PieceType};
 
 // human readable chess coordinate, that can be converted to an index to board.squares vector
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 struct Coordinate {
     file: char,
     rank: usize,
@@ -218,9 +218,20 @@ impl Board {
         let piece = &self.squares[i0].unwrap();
         self.squares[i] = Some(*(piece));
         self.squares[i0] = None;
+        match move_type {
+            // add en passant sq
+            MoveType::DoublePush(target) => {
+                self.en_passant_target_square = Some(target.try_into()?)
+            },
+            // remove en passant sq
+            MoveType::EnPassant(captured) => {
+                self.squares[captured] = None;
+                self.en_passant_target_square = None; }
+            _ => {}
+        }
         // change active colour
+        self.active_colour.change_colour();
         // change castling rights
-        // change en passant sq
         // change half-move clock
         // change full-move number
         Ok(())
@@ -249,6 +260,9 @@ impl Board {
             Some(p) => p,
             None => return Err(BoardError::EmptySquare),
         };
+        if piece.colour != self.active_colour {
+            return Err(BoardError::WrongColour);
+        }
 
         match piece.piece_type {
             PieceType::Pawn => {
@@ -257,36 +271,100 @@ impl Board {
                         // regular moves
                         let mut target = i0 + 8;
                         // check target exists on the board and is empty
-                        if (0..63).contains(&target) && self.squares[target].is_none() {
+                        if (0..64).contains(&target) && self.squares[target].is_none() {
                             move_vec.push((target, MoveType::Regular));
                             // if piece on starting file and can move 1 extra space -> can double move
                             target += 8;
-                            if (0..63).contains(&target)
+                            if (0..64).contains(&target)
                                 && (8..16).contains(&i0)
                                 && self.squares[target].is_none()
                             {
-                                move_vec.push((target, MoveType::Regular));
+                                move_vec.push((target, MoveType::DoublePush(target - 8)));
                             }
                         }
                         // captures
                         target = i0 + 7;
-                        if (0..63).contains(&target) {
-                            if let Some(piece) = self.squares[target] {
+                        if (0..64).contains(&target) {
+                            if let Some(piece) = &self.squares[target] {
                                 if piece.colour == Colour::Black {
                                     move_vec.push((target, MoveType::Capture));
+                                }
+                            }
+                            // check for en passant
+                            else if let Some(coord) = self.en_passant_target_square {
+                                if target == coord.try_into()? {
+                                    move_vec.push((target, MoveType::EnPassant(target - 8)));
                                 }
                             }
                         }
                         target = i0 + 9;
-                        if (0..63).contains(&target) {
-                            if let Some(piece) = self.squares[target] {
+                        if (0..64).contains(&target) {
+                            if let Some(piece) = &self.squares[target] {
                                 if piece.colour == Colour::Black {
                                     move_vec.push((target, MoveType::Capture));
                                 }
                             }
+                            // check for en passant
+                            else if let Some(coord) = self.en_passant_target_square {
+                                if target == coord.try_into()? {
+                                    move_vec.push((target, MoveType::EnPassant(target - 8)));
+                                }
+                            }
                         }
                     }
-                    Colour::Black => {}
+                    Colour::Black => {
+                        // regular moves
+                        // check for usize overflow
+                        if let Some(target) = usize::checked_sub(i0, 8) {
+                            // check target exists on the board and is empty
+                            if (0..64).contains(&target) && self.squares[target].is_none() {
+                                move_vec.push((target, MoveType::Regular));
+                                // if piece on starting file and can move 1 extra space -> can double move
+                                if let Some(target) = usize::checked_sub(target, 8) {
+                                    if (0..64).contains(&target)
+                                        && (48..56).contains(&i0)
+                                        && self.squares[target].is_none()
+                                    {
+                                        move_vec.push((target, MoveType::DoublePush(target + 8)));
+                                    }
+                                }
+                            }
+                        }
+
+                        // captures
+                        if let Some(target) = usize::checked_sub(i0, 7) {
+                            if (0..64).contains(&target) {
+                                // if piece exists
+                                if let Some(piece) = self.squares[target] {
+                                    if piece.colour == Colour::White {
+                                        move_vec.push((target, MoveType::Capture));
+                                    }
+                                }
+                                // check for en passant
+                                else if let Some(coord) = self.en_passant_target_square {
+                                    if target == coord.try_into()? {
+                                        move_vec.push((target, MoveType::EnPassant(target + 8)));
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(target) = usize::checked_sub(i0, 9) {
+                            if (0..63).contains(&target) {
+                                if let Some(piece) = self.squares[target] {
+                                    if piece.colour == Colour::White {
+                                        move_vec.push((target, MoveType::Capture));
+                                    }
+                                }
+                                // check for en passant
+                                else if let Some(coord) = self.en_passant_target_square {
+                                    if target == coord.try_into()? {
+                                        move_vec.push((target, MoveType::EnPassant(target + 8)));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             _ => todo!(),
@@ -363,12 +441,15 @@ impl Board {
 }
 
 // move logic
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum MoveType {
     Regular,
+    // double pawn move providing index of en passant target square
+    DoublePush(usize),
     Capture,
     Castle,
-    EnPassant,
+    // provides index of piece capture by en passant
+    EnPassant(usize),
     Promotion,
 }
 

@@ -9,6 +9,15 @@ pub enum Colour {
     Black,
 }
 
+impl Colour {
+    pub fn change_colour(&mut self) {
+        match self {
+            Colour::White => *self = Colour::Black,
+            Colour::Black => *self = Colour::White,
+        }
+    }
+}
+
 impl FromStr for Colour {
     type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
