@@ -1,13 +1,11 @@
 use std::str::FromStr;
-
-use board::BoardError;
 mod board;
 
 fn main() {
     let result = run();
     match result {
         Ok(_) => println!("finished!"),
-        Err(e) => eprintln!("{}", e)
+        Err(e) => eprintln!("{}", e),
     }
     println!("exiting...")
 }
@@ -21,7 +19,7 @@ fn run() -> Result<(), board::BoardError> {
         let mv = board::Move::from_str(&mv_str)?;
         board.process_move(mv)?;
         println!("{}", board);
-    };
+    }
     println!("{:?}", board);
     Ok(())
 }

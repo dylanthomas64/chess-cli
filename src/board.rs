@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum Colour {
     White,
     Black,
@@ -20,7 +20,18 @@ impl FromStr for Colour {
         }
     }
 }
-#[derive(Debug, PartialEq, Clone)]
+
+impl Display for Colour {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Colour::White => "w",
+            Colour::Black => "b",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum PieceType {
     Pawn,
     Bishop,
@@ -29,7 +40,7 @@ enum PieceType {
     Queen,
     King,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 struct Piece {
     piece_type: PieceType,
     colour: Colour,
@@ -56,6 +67,23 @@ impl TryFrom<char> for Piece {
     }
 }
 
+impl Into<char> for Piece {
+    fn into(self) -> char {
+        let piece_type = match self.piece_type {
+            PieceType::Pawn => 'p',
+            PieceType::Bishop => 'b',
+            PieceType::Knight => 'n',
+            PieceType::Rook => 'r',
+            PieceType::Queen => 'q',
+            PieceType::King => 'k',
+        };
+        match self.colour {
+            Colour::White => return piece_type.to_ascii_uppercase(),
+            Colour::Black => return piece_type,
+        }
+    }
+}
+
 impl Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let p = match &self.piece_type {
@@ -76,7 +104,7 @@ impl Display for Piece {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Move {
     from: Coordinate,
     destination: Coordinate,
@@ -187,6 +215,7 @@ impl Display for Coordinate {
         write!(f, "{}{}", self.file, self.rank)
     }
 }
+
 impl FromStr for Coordinate {
     type Err = BoardError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -370,8 +399,56 @@ impl Board {
             Err(BoardError::InvalidMove("piece does not exist".to_string()))
         }
     }
+    // check that move is legal
     fn validate_move(mv: Move) -> Result<(), BoardError> {
         todo!()
+    }
+    fn export_fen(&self) -> Result<String, BoardError> {
+        let mut piece_data: Vec<String> = vec![];
+
+        for rank in 0..8usize {
+            let mut counter: u8 = 0;
+            let mut rank_str: String = "".to_string();
+            for file in 0..8usize {
+                match &self.squares[file + (rank * 8)] {
+                    Some(piece) => {
+                        if counter == 0 {
+                            rank_str.push((*piece).into());
+                        } else {
+                            rank_str.push(counter.to_string().chars().next().unwrap());
+                            rank_str.push((*piece).into());
+                            counter = 0;
+                        }
+                    }
+                    None => counter += 1,
+                }
+            }
+            if counter > 0 {
+                rank_str.push(counter.to_string().chars().next().unwrap());
+            }
+            piece_data.push(rank_str);
+        }
+        let mut state: String = piece_data
+            .into_iter()
+            .rev()
+            .map(|s| format!("{}/", s))
+            .collect();
+        state = state.strip_suffix('/').unwrap().to_string();
+
+        let en_passant = match &self.en_passant_target_square {
+            Some(coord) => coord.to_string(),
+            None => "-".to_string(),
+        };
+        let fen_output = format!(
+            "{} {} {} {} {} {}",
+            state,
+            self.active_colour,
+            self.castling_rights,
+            en_passant,
+            self.half_move_clock,
+            self.full_move_number
+        );
+        return Ok(fen_output);
     }
 }
 
@@ -524,7 +601,7 @@ impl FromStr for Board {
 /* ------- T E S T S ---------*/
 
 #[cfg(test)]
-mod conversions {
+mod constructors {
     use super::*;
 
     // piece tests
@@ -598,5 +675,43 @@ mod conversions {
         let coord = Coordinate { file: 'b', rank: 2 };
         let index = 9usize;
         assert_eq!(index, Coordinate::try_into(coord).unwrap());
+    }
+
+    #[test]
+    fn move_from_str() {
+        let from = Coordinate::from_str("e3").unwrap();
+        let destination = Coordinate::from_str("e4").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: None,
+        };
+        assert_eq!(mv, Move::from_str("e3e4").unwrap());
+        // promotion
+        let from = Coordinate::from_str("e7").unwrap();
+        let destination = Coordinate::from_str("e8").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: Some(PieceType::Queen),
+        };
+        assert_eq!(mv, Move::from_str("e7e8q").unwrap());
+    }
+}
+
+#[cfg(test)]
+mod exports {
+    use super::*;
+    #[test]
+    fn fen_export() {
+        let fen_vec: Vec<String> = vec![
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2".to_string(),
+            "rn2kb1r/ppp1pppp/8/8/4q3/3P1N1b/PPP1BPnP/RNBQ1K1R b kq - 0 1".to_string(),
+        ];
+        for fen in fen_vec {
+            let board = Board::new(fen.clone()).unwrap();
+            assert_eq!(fen, board.export_fen().unwrap());
+        }
     }
 }
