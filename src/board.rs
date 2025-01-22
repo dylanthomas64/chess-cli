@@ -3,136 +3,14 @@ use std::{
     str::FromStr,
 };
 
-use crate::errors::BoardError;
-use crate::piece::{Colour, Piece, PieceType};
+use crate::{errors::BoardError, moves::{self, Coordinate, Move, MoveType}};
+use crate::pieces::{Colour, Piece, PieceType};
 
-// human readable chess coordinate, that can be converted to an index to board.squares vector
-#[derive(Debug, PartialEq, Clone, Copy)]
-struct Coordinate {
-    file: char,
-    rank: usize,
-}
-impl Display for Coordinate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.file, self.rank)
-    }
-}
 
-impl FromStr for Coordinate {
-    type Err = BoardError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut chars = s.chars();
-        let file: char;
-        let rank: usize;
-        let possible_files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-        if chars.clone().count() == 2usize {
-            file = chars.next().unwrap();
-            rank = chars.next().unwrap().to_string().parse::<usize>()?;
-            for c in possible_files {
-                if c == file {
-                    if (1..=8).contains(&rank) {
-                        return Ok(Coordinate { file, rank });
-                    } else {
-                        return Err(BoardError::CoordinateError(
-                            "rank not in range 1..=8".to_string(),
-                        ));
-                    }
-                }
-            }
-            return Err(BoardError::CoordinateError(
-                "file not in range a-h".to_string(),
-            ));
-        }
-        Err(BoardError::CoordinateError(
-            "must contain exactly 2 chars (promotion not implemented...)".to_string(),
-        ))
-    }
-}
 
-impl TryInto<usize> for Coordinate {
-    type Error = BoardError;
-    fn try_into(self) -> Result<usize, Self::Error> {
-        let file: usize = match self.file {
-            'a' => 0,
-            'b' => 1,
-            'c' => 2,
-            'd' => 3,
-            'e' => 4,
-            'f' => 5,
-            'g' => 6,
-            'h' => 7,
-            _ => panic!(),
-        };
-        let rank: usize = self.rank - 1;
-        Ok(file + (8 * rank))
-    }
-}
-
-impl TryFrom<usize> for Coordinate {
-    type Error = BoardError;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        let file = match value % 8 {
-            0 => 'a',
-            1 => 'b',
-            2 => 'c',
-            3 => 'd',
-            4 => 'e',
-            5 => 'f',
-            6 => 'g',
-            7 => 'h',
-            _ => panic!(),
-        };
-        let rank = (value / 8) + 1;
-        Ok(Coordinate { file, rank })
-    }
-}
-
-// move struct that provides all necessary information for a uci move
-#[derive(Debug, PartialEq)]
-pub struct Move {
-    from: Coordinate,
-    destination: Coordinate,
-    // eg. for e7e8q
-    promotion: Option<PieceType>,
-}
-
-impl FromStr for Move {
-    type Err = BoardError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 4 {
-            let from = Coordinate::from_str(&s[0..2])?;
-            let destination = Coordinate::from_str(&s[2..4])?;
-            Ok(Move {
-                from,
-                destination,
-                promotion: None,
-            })
-        } else if s.len() == 5 {
-            let from = Coordinate::from_str(&s[0..2])?;
-            let destination = Coordinate::from_str(&s[2..4])?;
-            let promotion = Some(
-                Piece::try_from(s[4..5].chars().next().ok_or(BoardError::PromotionError)?)?
-                    .piece_type,
-            );
-            Ok(Move {
-                from,
-                destination,
-                promotion,
-            })
-        } else {
-            Err(BoardError::MoveError)
-        }
-    }
-}
-
-impl Display for Move {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.from, self.destination)
-    }
-}
-#[derive(Debug, PartialEq)]
 
 // struct to represent castling rights
+#[derive(Debug, PartialEq)]
 struct CastlingRights {
     //white side
     k_w: bool,
@@ -203,12 +81,21 @@ pub struct Board {
     full_move_number: usize,
 }
 
+
+
 impl Board {
     pub fn new(fen: String) -> Result<Board, BoardError> {
         Self::from_str(&fen)
     }
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
+    }
+    // get squares vec as reference
+    pub fn get_squares(&self) -> &Vec<Option<Piece>> {
+        &self.squares
+    }
+    pub fn get_en_passant_target(&self) -> &Option<Coordinate> {
+        &self.en_passant_target_square
     }
     pub fn process_move(&mut self, mv: Move) -> Result<(), BoardError> {
         let i0: usize = mv.from.try_into()?;
@@ -222,11 +109,12 @@ impl Board {
             // add en passant sq
             MoveType::DoublePush(target) => {
                 self.en_passant_target_square = Some(target.try_into()?)
-            },
+            }
             // remove en passant sq
             MoveType::EnPassant(captured) => {
                 self.squares[captured] = None;
-                self.en_passant_target_square = None; }
+                self.en_passant_target_square = None;
+            }
             _ => {}
         }
         // change active colour
@@ -252,7 +140,7 @@ impl Board {
         }
     }
 
-    // provides a tuple of (possible indexs, move type) that the piece at supplied index can legally move to
+    // provides a tuple of (possible indexes, move type) that the piece at supplied index can legally move to
     fn legal_moves(&self, i0: usize) -> Result<Vec<(usize, MoveType)>, BoardError> {
         let mut move_vec: Vec<(usize, MoveType)> = vec![];
         //println!("checking legal moves at v[{}]", i0);
@@ -263,109 +151,9 @@ impl Board {
         if piece.colour != self.active_colour {
             return Err(BoardError::WrongColour);
         }
-
         match piece.piece_type {
             PieceType::Pawn => {
-                match piece.colour {
-                    Colour::White => {
-                        // regular moves
-                        let mut target = i0 + 8;
-                        // check target exists on the board and is empty
-                        if (0..64).contains(&target) && self.squares[target].is_none() {
-                            move_vec.push((target, MoveType::Regular));
-                            // if piece on starting file and can move 1 extra space -> can double move
-                            target += 8;
-                            if (0..64).contains(&target)
-                                && (8..16).contains(&i0)
-                                && self.squares[target].is_none()
-                            {
-                                move_vec.push((target, MoveType::DoublePush(target - 8)));
-                            }
-                        }
-                        // captures
-                        target = i0 + 7;
-                        if (0..64).contains(&target) {
-                            if let Some(piece) = &self.squares[target] {
-                                if piece.colour == Colour::Black {
-                                    move_vec.push((target, MoveType::Capture));
-                                }
-                            }
-                            // check for en passant
-                            else if let Some(coord) = self.en_passant_target_square {
-                                if target == coord.try_into()? {
-                                    move_vec.push((target, MoveType::EnPassant(target - 8)));
-                                }
-                            }
-                        }
-                        target = i0 + 9;
-                        if (0..64).contains(&target) {
-                            if let Some(piece) = &self.squares[target] {
-                                if piece.colour == Colour::Black {
-                                    move_vec.push((target, MoveType::Capture));
-                                }
-                            }
-                            // check for en passant
-                            else if let Some(coord) = self.en_passant_target_square {
-                                if target == coord.try_into()? {
-                                    move_vec.push((target, MoveType::EnPassant(target - 8)));
-                                }
-                            }
-                        }
-                    }
-                    Colour::Black => {
-                        // regular moves
-                        // check for usize overflow
-                        if let Some(target) = usize::checked_sub(i0, 8) {
-                            // check target exists on the board and is empty
-                            if (0..64).contains(&target) && self.squares[target].is_none() {
-                                move_vec.push((target, MoveType::Regular));
-                                // if piece on starting file and can move 1 extra space -> can double move
-                                if let Some(target) = usize::checked_sub(target, 8) {
-                                    if (0..64).contains(&target)
-                                        && (48..56).contains(&i0)
-                                        && self.squares[target].is_none()
-                                    {
-                                        move_vec.push((target, MoveType::DoublePush(target + 8)));
-                                    }
-                                }
-                            }
-                        }
-
-                        // captures
-                        if let Some(target) = usize::checked_sub(i0, 7) {
-                            if (0..64).contains(&target) {
-                                // if piece exists
-                                if let Some(piece) = self.squares[target] {
-                                    if piece.colour == Colour::White {
-                                        move_vec.push((target, MoveType::Capture));
-                                    }
-                                }
-                                // check for en passant
-                                else if let Some(coord) = self.en_passant_target_square {
-                                    if target == coord.try_into()? {
-                                        move_vec.push((target, MoveType::EnPassant(target + 8)));
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Some(target) = usize::checked_sub(i0, 9) {
-                            if (0..63).contains(&target) {
-                                if let Some(piece) = self.squares[target] {
-                                    if piece.colour == Colour::White {
-                                        move_vec.push((target, MoveType::Capture));
-                                    }
-                                }
-                                // check for en passant
-                                else if let Some(coord) = self.en_passant_target_square {
-                                    if target == coord.try_into()? {
-                                        move_vec.push((target, MoveType::EnPassant(target + 8)));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                move_vec.append(&mut moves::get_pawn_legal_moves(self.get_squares(), i0, &piece.colour, self.get_en_passant_target())?)
             }
             _ => todo!(),
         }
@@ -440,18 +228,7 @@ impl Board {
     }
 }
 
-// move logic
-#[derive(Debug, PartialEq)]
-enum MoveType {
-    Regular,
-    // double pawn move providing index of en passant target square
-    DoublePush(usize),
-    Capture,
-    Castle,
-    // provides index of piece capture by en passant
-    EnPassant(usize),
-    Promotion,
-}
+
 
 impl FromStr for Board {
     type Err = BoardError;
