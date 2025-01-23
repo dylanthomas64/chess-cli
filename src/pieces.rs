@@ -111,5 +111,3 @@ impl Display for Piece {
         write!(f, "\x1B[30m")
     }
 }
-
-

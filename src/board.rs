@@ -3,11 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::{errors::BoardError, moves::{self, Coordinate, Move, MoveType}};
 use crate::pieces::{Colour, Piece, PieceType};
-
-
-
+use crate::{
+    errors::BoardError,
+    moves::{self, Coordinate, Move, MoveType},
+};
 
 // struct to represent castling rights
 #[derive(Debug, PartialEq)]
@@ -81,8 +81,6 @@ pub struct Board {
     full_move_number: usize,
 }
 
-
-
 impl Board {
     pub fn new(fen: String) -> Result<Board, BoardError> {
         Self::from_str(&fen)
@@ -97,11 +95,29 @@ impl Board {
     pub fn get_en_passant_target(&self) -> &Option<Coordinate> {
         &self.en_passant_target_square
     }
-    pub fn process_move(&mut self, mv: Move) -> Result<(), BoardError> {
-        let i0: usize = mv.from.try_into()?;
+    pub fn process_move(&mut self, mv: &Move) -> Result<(), BoardError> {
+        let i0: usize = mv.from.try_into().unwrap();
         let i: usize = mv.destination.try_into()?;
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
+
+        /*
+
+        if move_type == promotion -> if mv.promotion.is_none() -> Err
+
+        >> does this move put opponent king in check? (only required for PGN '+' notation)
+
+        does this move put this colour king in check?
+
+        create a copy of squares with applied move.
+        check all of opponent's new legal moves. If any index contains this king => Err
+        (maybe check for each legal move one at a time to reduce search time)
+
+        squares = squares_copy
+
+        */
+
+        // move OK, apply changes to board
         let piece = &self.squares[i0].unwrap();
         self.squares[i] = Some(*(piece));
         self.squares[i0] = None;
@@ -152,9 +168,12 @@ impl Board {
             return Err(BoardError::WrongColour);
         }
         match piece.piece_type {
-            PieceType::Pawn => {
-                move_vec.append(&mut moves::get_pawn_legal_moves(self.get_squares(), i0, &piece.colour, self.get_en_passant_target())?)
-            }
+            PieceType::Pawn => move_vec.append(&mut moves::get_pawn_legal_moves(
+                self.get_squares(),
+                i0,
+                &piece.colour,
+                self.get_en_passant_target(),
+            )?),
             _ => todo!(),
         }
 
@@ -227,8 +246,6 @@ impl Board {
         Ok(fen_output)
     }
 }
-
-
 
 impl FromStr for Board {
     type Err = BoardError;

@@ -46,7 +46,6 @@ impl FromStr for Coordinate {
         ))
     }
 }
-
 impl TryInto<usize> for Coordinate {
     type Error = BoardError;
     fn try_into(self) -> Result<usize, Self::Error> {
@@ -65,6 +64,7 @@ impl TryInto<usize> for Coordinate {
         Ok(file + (8 * rank))
     }
 }
+
 impl TryInto<usize> for &Coordinate {
     type Error = BoardError;
     fn try_into(self) -> Result<usize, Self::Error> {
@@ -149,24 +149,27 @@ impl Display for Move {
 
 // move logic
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)]
 pub enum MoveType {
     Regular,
     // double pawn move providing index of en passant target square
     DoublePush(usize),
     Capture,
-    Castle,
+    CastleKingSide,
+    CastleQueenSide,
     // provides index of piece capture by en passant
     EnPassant(usize),
-    Promotion,
+    PromotionPush,
+    PromotionCapture,
 }
 
 // piece logic
 
 pub fn get_pawn_legal_moves(
-    squares: &Vec<Option<Piece>>,
+    squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-    en_passant_target: &Option<Coordinate>
+    en_passant_target: &Option<Coordinate>,
 ) -> Result<Vec<(usize, MoveType)>, BoardError> {
     let mut move_vec: Vec<(usize, MoveType)> = vec![];
     match colour {
