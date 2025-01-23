@@ -1,12 +1,14 @@
 use std::str::FromStr;
 mod board;
 mod errors;
-mod moves;
+mod move_logic;
 mod pieces;
+mod coordinate;
+
 
 use board::Board;
 use errors::BoardError;
-use moves::Move;
+use move_logic::Move;
 
 fn main() {
     let result = run();

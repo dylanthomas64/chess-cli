@@ -3,10 +3,12 @@ use std::{
     str::FromStr,
 };
 
-use crate::pieces::{Colour, Piece, PieceType};
+
 use crate::{
+    pieces::{Colour, Piece, PieceType},
     errors::BoardError,
-    moves::{self, Coordinate, Move, MoveType},
+    move_logic::{self, Move, MoveType},
+    coordinate::Coordinate
 };
 
 // struct to represent castling rights
@@ -183,7 +185,7 @@ impl Board {
             return Err(BoardError::WrongColour);
         }
         match piece.piece_type {
-            PieceType::Pawn => move_vec.append(&mut moves::get_pawn_legal_moves(
+            PieceType::Pawn => move_vec.append(&mut move_logic::get_pawn_legal_moves(
                 self.get_squares(),
                 i0,
                 &piece.colour,
