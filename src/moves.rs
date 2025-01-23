@@ -176,24 +176,31 @@ pub fn get_pawn_legal_moves(
         Colour::White => {
             // regular moves
             let mut target = piece_index + 8;
-            // check target exists on the board and is empty
-            if (0..64).contains(&target) && squares[target].is_none() {
-                move_vec.push((target, MoveType::Regular));
-                // if piece on starting file and can move 1 extra space -> can double move
-                target += 8;
-                if (0..64).contains(&target)
-                    && (8..16).contains(&piece_index)
-                    && squares[target].is_none()
-                {
-                    move_vec.push((target, MoveType::DoublePush(target - 8)));
+            if squares[target].is_none() {
+                // check for promotion
+                if (56..64).contains(&target) {
+                    move_vec.push((target, MoveType::PromotionPush));
+                } else {
+                    move_vec.push((target, MoveType::Regular));
+                    // if piece on starting file and can move 1 extra space -> can double move
+                    target += 8;
+                    if (8..16).contains(&piece_index) && squares[target].is_none() {
+                        move_vec.push((target, MoveType::DoublePush(target - 8)));
+                    }
                 }
             }
-            // captures
-            target = piece_index + 7;
-            if (0..64).contains(&target) {
+            // up left capture
+            // if not on a-file
+            if &piece_index % 8 != 0 {
+                target = piece_index + 7;
                 if let Some(piece) = squares[target] {
                     if piece.colour == Colour::Black {
-                        move_vec.push((target, MoveType::Capture));
+                        // check for promotion
+                        if (56..64).contains(&target) {
+                            move_vec.push((target, MoveType::PromotionCapture));
+                        } else {
+                            move_vec.push((target, MoveType::Capture));
+                        }
                     }
                 }
                 // check for en passant
@@ -203,11 +210,19 @@ pub fn get_pawn_legal_moves(
                     }
                 }
             }
-            target = piece_index + 9;
-            if (0..64).contains(&target) {
+
+            // up right capture
+            // if piece is not on h-file
+            if &piece_index % 8 != 7 {
+                target = piece_index + 9;
                 if let Some(piece) = squares[target] {
                     if piece.colour == Colour::Black {
-                        move_vec.push((target, MoveType::Capture));
+                        // check for promotion
+                        if (56..64).contains(&target) {
+                            move_vec.push((target, MoveType::PromotionCapture));
+                        } else {
+                            move_vec.push((target, MoveType::Capture));
+                        }
                     }
                 }
                 // check for en passant
@@ -220,53 +235,62 @@ pub fn get_pawn_legal_moves(
         }
         Colour::Black => {
             // regular moves
-            // check for usize overflow
-            if let Some(target) = usize::checked_sub(piece_index, 8) {
-                // check target exists on the board and is empty
-                if (0..64).contains(&target) && squares[target].is_none() {
+            let mut target = piece_index - 8;
+            if squares[target].is_none() {
+                // check for promotion
+                if (0..8).contains(&target) {
+                    move_vec.push((target, MoveType::PromotionPush));
+                } else {
                     move_vec.push((target, MoveType::Regular));
                     // if piece on starting file and can move 1 extra space -> can double move
-                    if let Some(target) = usize::checked_sub(target, 8) {
-                        if (0..64).contains(&target)
-                            && (48..56).contains(&piece_index)
-                            && squares[target].is_none()
-                        {
+                    if (48..56).contains(&piece_index) {
+                        target -= 8;
+                        if squares[target].is_none() {
                             move_vec.push((target, MoveType::DoublePush(target + 8)));
                         }
                     }
                 }
             }
 
-            // captures
-            if let Some(target) = usize::checked_sub(piece_index, 7) {
-                if (0..64).contains(&target) {
-                    // if piece exists
-                    if let Some(piece) = squares[target] {
-                        if piece.colour == Colour::White {
+            // down right capture
+
+            // if target on h file then not allowed
+            if &piece_index % 8 != 7 {
+                target = &piece_index - 7;
+                if let Some(piece) = squares[target] {
+                    if piece.colour == Colour::White {
+                        if (0..8).contains(&target) {
+                            move_vec.push((target, MoveType::PromotionCapture));
+                        } else {
                             move_vec.push((target, MoveType::Capture));
                         }
                     }
-                    // check for en passant
-                    else if let Some(coord) = en_passant_target {
-                        if target == coord.try_into()? {
-                            move_vec.push((target, MoveType::EnPassant(target + 8)));
-                        }
+                }
+                // check for en passant
+                else if let Some(coord) = en_passant_target {
+                    if target == coord.try_into()? {
+                        move_vec.push((target, MoveType::EnPassant(target + 8)));
                     }
                 }
             }
 
-            if let Some(target) = usize::checked_sub(piece_index, 9) {
-                if (0..63).contains(&target) {
-                    if let Some(piece) = squares[target] {
-                        if piece.colour == Colour::White {
+            // down left capture
+            //if is not on a-file
+            if &piece_index % 8 != 0 {
+                target = &piece_index - 9;
+                if let Some(piece) = squares[target] {
+                    if piece.colour == Colour::White {
+                        if (0..8).contains(&target) {
+                            move_vec.push((target, MoveType::PromotionCapture));
+                        } else {
                             move_vec.push((target, MoveType::Capture));
                         }
                     }
-                    // check for en passant
-                    else if let Some(coord) = en_passant_target {
-                        if target == coord.try_into()? {
-                            move_vec.push((target, MoveType::EnPassant(target + 8)));
-                        }
+                }
+                // check for en passant
+                else if let Some(coord) = en_passant_target {
+                    if target == coord.try_into()? {
+                        move_vec.push((target, MoveType::EnPassant(target + 8)));
                     }
                 }
             }

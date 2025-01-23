@@ -101,9 +101,23 @@ impl Board {
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
 
+        // get Piece to move
+        let piece = match move_type {
+            // if promotion
+            MoveType::PromotionPush | MoveType::PromotionCapture => match mv.promotion {
+                Some(piece_type) => Piece {
+                    piece_type,
+                    colour: self.active_colour,
+                },
+                None => return Err(BoardError::PromotionError),
+            },
+            // if anything else
+            _ => self.squares[i0].unwrap(),
+        };
+
         /*
 
-        if move_type == promotion -> if mv.promotion.is_none() -> Err
+
 
         >> does this move put opponent king in check? (only required for PGN '+' notation)
 
@@ -118,9 +132,10 @@ impl Board {
         */
 
         // move OK, apply changes to board
-        let piece = &self.squares[i0].unwrap();
-        self.squares[i] = Some(*(piece));
+
+        self.squares[i] = Some(piece);
         self.squares[i0] = None;
+
         match move_type {
             // add en passant sq
             MoveType::DoublePush(target) => {
