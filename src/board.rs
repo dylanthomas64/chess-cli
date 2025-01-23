@@ -1,123 +1,15 @@
 use std::{
-    fmt::{self, Display},
-    num::ParseIntError,
+    fmt::{self, Display, Write},
     str::FromStr,
 };
 
-#[derive(PartialEq, Debug, Clone)]
-enum Colour {
-    White,
-    Black,
-}
+use crate::pieces::{Colour, Piece, PieceType};
+use crate::{
+    errors::BoardError,
+    moves::{self, Coordinate, Move, MoveType},
+};
 
-impl FromStr for Colour {
-    type Err = BoardError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "w" => Ok(Colour::White),
-            "b" => Ok(Colour::Black),
-            _ => Err(BoardError::ColourError),
-        }
-    }
-}
-#[derive(Debug, PartialEq, Clone)]
-enum PieceType {
-    Pawn,
-    Bishop,
-    Knight,
-    Rook,
-    Queen,
-    King,
-}
-#[derive(Clone, Debug)]
-struct Piece {
-    piece_type: PieceType,
-    colour: Colour,
-}
-
-impl TryFrom<char> for Piece {
-    type Error = BoardError;
-    fn try_from(c: char) -> Result<Self, BoardError> {
-        let piece_type = match &c.to_ascii_lowercase() {
-            'p' => PieceType::Pawn,
-            'b' => PieceType::Bishop,
-            'n' => PieceType::Knight,
-            'r' => PieceType::Rook,
-            'q' => PieceType::Queen,
-            'k' => PieceType::King,
-            _ => return Err(BoardError::PieceError),
-        };
-        let colour = if c.is_ascii_uppercase() {
-            Colour::White
-        } else {
-            Colour::Black
-        };
-        Ok(Piece { piece_type, colour })
-    }
-}
-
-impl Display for Piece {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let p = match &self.piece_type {
-            PieceType::Pawn => "p",
-            PieceType::Bishop => "b",
-            PieceType::Knight => "n",
-            PieceType::Rook => "r",
-            PieceType::Queen => "q",
-            PieceType::King => "k",
-        };
-        if self.colour == Colour::White {
-            write!(f, "\x1B[36m{}", p.to_ascii_uppercase())?;
-        } else {
-            write!(f, "\x1B[31m{}", p)?;
-        }
-        // rest to default colour (black)
-        write!(f, "\x1B[30m")
-    }
-}
-
-#[derive(Debug)]
-pub struct Move {
-    from: Coordinate,
-    destination: Coordinate,
-    // eg. for e7e8q
-    promotion: Option<PieceType>,
-}
-
-impl FromStr for Move {
-    type Err = BoardError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 4 {
-            let from = Coordinate::from_str(&s[0..2])?;
-            let destination = Coordinate::from_str(&s[2..4])?;
-            Ok(Move {
-                from,
-                destination,
-                promotion: None,
-            })
-        } else if s.len() == 5 {
-            let from = Coordinate::from_str(&s[0..2])?;
-            let destination = Coordinate::from_str(&s[2..4])?;
-            let promotion = Some(
-                Piece::try_from(s[4..5].chars().next().ok_or(BoardError::PromotionError)?)?
-                    .piece_type,
-            );
-            Ok(Move {
-                from,
-                destination,
-                promotion,
-            })
-        } else {
-            Err(BoardError::MoveError)
-        }
-    }
-}
-
-impl Display for Move {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.from, self.destination)
-    }
-}
+// struct to represent castling rights
 #[derive(Debug, PartialEq)]
 struct CastlingRights {
     //white side
@@ -176,87 +68,7 @@ enum GameState {
     Resignation,
 }
 
-// human readable chess coordinate, that can be converted to an index to board.squares vector
-#[derive(Debug, PartialEq)]
-struct Coordinate {
-    file: char,
-    rank: usize,
-}
-impl Display for Coordinate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.file, self.rank)
-    }
-}
-impl FromStr for Coordinate {
-    type Err = BoardError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut chars = s.chars();
-        let file: char;
-        let rank: usize;
-        let possible_files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-        if chars.clone().count() == 2usize {
-            file = chars.next().unwrap();
-            rank = chars.next().unwrap().to_string().parse::<usize>()?;
-            for c in possible_files {
-                if c == file {
-                    if (1..=8).contains(&rank) {
-                        return Ok(Coordinate { file, rank });
-                    } else {
-                        return Err(BoardError::CoordinateError(
-                            "rank not in range 1..=8".to_string(),
-                        ));
-                    }
-                }
-            }
-            return Err(BoardError::CoordinateError(
-                "file not in range a-h".to_string(),
-            ));
-        }
-        Err(BoardError::CoordinateError(
-            "must contain exactly 2 chars (promotion not implemented...)".to_string(),
-        ))
-    }
-}
-
-impl TryInto<usize> for Coordinate {
-    type Error = BoardError;
-    fn try_into(self) -> Result<usize, Self::Error> {
-        let file: usize = match self.file {
-            'a' => 0,
-            'b' => 1,
-            'c' => 2,
-            'd' => 3,
-            'e' => 4,
-            'f' => 5,
-            'g' => 6,
-            'h' => 7,
-            _ => panic!(),
-        };
-        let rank: usize = self.rank - 1;
-        Ok(file + (8 * rank))
-    }
-}
-
-impl TryFrom<usize> for Coordinate {
-    type Error = BoardError;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        let file = match value % 8 {
-            0 => 'a',
-            1 => 'b',
-            2 => 'c',
-            3 => 'd',
-            4 => 'e',
-            5 => 'f',
-            6 => 'g',
-            7 => 'h',
-            _ => panic!(),
-        };
-        let rank = (value / 8) + 1;
-        Ok(Coordinate { file, rank })
-    }
-}
-
-// contains board representation and relevant information
+// contains board representation and all relevant information. Constructed from FEN string.
 pub struct Board {
     // where a1 == 0, a2 == 1, h8 == 63
     squares: Vec<Option<Piece>>,
@@ -268,84 +80,7 @@ pub struct Board {
     // starts at 1 and increments after black's move
     full_move_number: usize,
 }
-impl fmt::Display for Board {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let v: Vec<String> = self
-            .squares
-            .iter()
-            .map(|opt| match opt {
-                Some(piece) => format!("{}", piece),
-                None => " ".to_string(),
-            })
-            .collect();
-        let row1 = format!(
-            "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
-        );
-        let row2 = format!(
-            "2 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]
-        );
-        let row3 = format!(
-            "3 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[16], v[17], v[18], v[19], v[20], v[21], v[22], v[23]
-        );
-        let row4 = format!(
-            "4 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[24], v[25], v[26], v[27], v[28], v[29], v[30], v[31]
-        );
-        let row5 = format!(
-            "5 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[32], v[33], v[34], v[35], v[36], v[37], v[38], v[39]
-        );
-        let row6 = format!(
-            "6 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[40], v[41], v[42], v[43], v[44], v[45], v[46], v[47]
-        );
-        let row7 = format!(
-            "7 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[48], v[49], v[50], v[51], v[52], v[53], v[54], v[55]
-        );
-        let row8 = format!(
-            "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
-            v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
-        );
-        // set background colour
-        //write!(f, "\x1B[106m")?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row8)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row7)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row6)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row5)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row4)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row3)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row2)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "{}", row1)?;
-        writeln!(f, "  —------------------------------------------------")?;
-        writeln!(f, "     A     B     C     D     E     F     G     H   ")
-    }
-}
 
-impl fmt::Debug for Board {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "to move: '{:?}'", self.active_colour)?;
-        writeln!(f, "castling rights: '{}'", self.castling_rights)?;
-        writeln!(
-            f,
-            "en passant target: '{:?}'",
-            self.en_passant_target_square
-        )?;
-        writeln!(f, "half-moves: '{:?}'", self.half_move_clock)?;
-        write!(f, "moves: '{:?}'", self.full_move_number)
-    }
-}
 impl Board {
     pub fn new(fen: String) -> Result<Board, BoardError> {
         Self::from_str(&fen)
@@ -353,68 +88,164 @@ impl Board {
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
-    pub fn process_move(&mut self, mv: Move) -> Result<(), BoardError> {
-        let i0: usize = mv.from.try_into()?;
+    // get squares vec as reference
+    pub fn get_squares(&self) -> &Vec<Option<Piece>> {
+        &self.squares
+    }
+    pub fn get_en_passant_target(&self) -> &Option<Coordinate> {
+        &self.en_passant_target_square
+    }
+    pub fn process_move(&mut self, mv: &Move) -> Result<(), BoardError> {
+        let i0: usize = mv.from.try_into().unwrap();
         let i: usize = mv.destination.try_into()?;
-        //Self::validate_move(i0, i);
-        if let Some(piece) = &self.squares[i0] {
-            self.squares[i] = Some(piece.clone());
-            self.squares[i0] = None;
-            // change active colour
-            // change castling rights
-            // change en passant sq
-            // change half-move clock
-            // change full-move number
-            Ok(())
-        } else {
-            Err(BoardError::InvalidMove("piece does not exist".to_string()))
+        // causes error if no legal moves exist
+        let move_type = Self::validate_move(self, i0, i)?;
+
+        /*
+
+        if move_type == promotion -> if mv.promotion.is_none() -> Err
+
+        >> does this move put opponent king in check? (only required for PGN '+' notation)
+
+        does this move put this colour king in check?
+
+        create a copy of squares with applied move.
+        check all of opponent's new legal moves. If any index contains this king => Err
+        (maybe check for each legal move one at a time to reduce search time)
+
+        squares = squares_copy
+
+        */
+
+        // move OK, apply changes to board
+        let piece = &self.squares[i0].unwrap();
+        self.squares[i] = Some(*(piece));
+        self.squares[i0] = None;
+        match move_type {
+            // add en passant sq
+            MoveType::DoublePush(target) => {
+                self.en_passant_target_square = Some(target.try_into()?)
+            }
+            // remove en passant sq
+            MoveType::EnPassant(captured) => {
+                self.squares[captured] = None;
+                self.en_passant_target_square = None;
+            }
+            _ => {}
+        }
+        // change active colour
+        self.active_colour.change_colour();
+        // change castling rights
+        // change half-move clock
+        // change full-move number
+        Ok(())
+    }
+    // check that move is legal
+    fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
+        let move_vec = match Self::legal_moves(self, i0) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+        // for (x, m) in &move_vec {
+        //     //println!("[{}] {:?}", x, m);
+        // }
+        // check if index is in vec of legal moves
+        match move_vec.into_iter().find(|(x, _)| *x == i) {
+            Some((_, m)) => Ok(m),
+            None => Err(BoardError::InvalidMove),
         }
     }
-    fn validate_move(mv: Move) -> Result<(), BoardError> {
-        todo!()
-    }
-}
 
-// error types
-#[derive(Debug, PartialEq)]
-pub enum BoardError {
-    FenError(String),
-    PieceError,
-    ParseInt(std::num::ParseIntError),
-    ColourError,
-    CastlingRightsError,
-    CoordinateError(String),
-    MoveError,
-    PromotionError,
-    InvalidMove(String),
-    PgnError,
-    UciError,
-}
-
-impl From<ParseIntError> for BoardError {
-    fn from(value: ParseIntError) -> Self {
-        BoardError::ParseInt(value)
-    }
-}
-impl Display for BoardError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let error_msg: &str = match self {
-            Self::FenError(s) => s,
-            Self::PieceError => "error creating piece",
-            Self::ParseInt(e) => &format!("parse int error: {}", e),
-            Self::ColourError => "error creating colour",
-            Self::CastlingRightsError => "error creating castling rights",
-            Self::CoordinateError(s) => &format!("error creating coordinate: {}", s),
-            Self::MoveError => "error creating move",
-            Self::PromotionError => "error trying to promote",
-            Self::InvalidMove(s) => &format!("invalid move: {}", s),
-            Self::PgnError => "error pgn",
-            Self::UciError => "error uci",
+    // provides a tuple of (possible indexes, move type) that the piece at supplied index can legally move to
+    fn legal_moves(&self, i0: usize) -> Result<Vec<(usize, MoveType)>, BoardError> {
+        let mut move_vec: Vec<(usize, MoveType)> = vec![];
+        //println!("checking legal moves at v[{}]", i0);
+        let piece = match &self.squares[i0] {
+            Some(p) => p,
+            None => return Err(BoardError::EmptySquare),
         };
-        write!(f, "{}", error_msg)
+        if piece.colour != self.active_colour {
+            return Err(BoardError::WrongColour);
+        }
+        match piece.piece_type {
+            PieceType::Pawn => move_vec.append(&mut moves::get_pawn_legal_moves(
+                self.get_squares(),
+                i0,
+                &piece.colour,
+                self.get_en_passant_target(),
+            )?),
+            _ => todo!(),
+        }
+
+        if move_vec.is_empty() {
+            println!("empty board");
+            Err(BoardError::NoLegalMoves)
+        } else {
+            Ok(move_vec)
+        }
+    }
+
+    #[allow(dead_code)]
+    fn export_fen(&self) -> Result<String, BoardError> {
+        let mut piece_data: Vec<String> = vec![];
+
+        for rank in 0..8usize {
+            let mut counter: u8 = 0;
+            let mut rank_str: String = "".to_string();
+            for file in 0..8usize {
+                match &self.squares[file + (rank * 8)] {
+                    Some(piece) => {
+                        if counter == 0 {
+                            rank_str.push((*piece).into());
+                        } else {
+                            rank_str.push(counter.to_string().chars().next().unwrap());
+                            rank_str.push((*piece).into());
+                            counter = 0;
+                        }
+                    }
+                    None => counter += 1,
+                }
+            }
+            if counter > 0 {
+                rank_str.push(counter.to_string().chars().next().unwrap());
+            }
+            piece_data.push(rank_str);
+        }
+
+        let state: String = piece_data
+            .iter()
+            .rev()
+            .fold(String::new(), |mut output, x| {
+                let _ = write!(output, "{x}/");
+                output
+            })
+            .strip_suffix('/')
+            .unwrap()
+            .to_string();
+
+        // let mut state: String = piece_data
+        //     .into_iter()
+        //     .rev()
+        //     .map(|s| format!("{}/", s))
+        //     .collect();
+        // state = state.strip_suffix('/').unwrap().to_string();
+
+        let en_passant = match &self.en_passant_target_square {
+            Some(coord) => coord.to_string(),
+            None => "-".to_string(),
+        };
+        let fen_output = format!(
+            "{} {} {} {} {} {}",
+            state,
+            self.active_colour,
+            self.castling_rights,
+            en_passant,
+            self.half_move_clock,
+            self.full_move_number
+        );
+        Ok(fen_output)
     }
 }
-impl std::error::Error for BoardError {}
 
 impl FromStr for Board {
     type Err = BoardError;
@@ -521,10 +352,90 @@ impl FromStr for Board {
     }
 }
 
+// basic ascii chess board
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let v: Vec<String> = self
+            .squares
+            .iter()
+            .map(|opt| match opt {
+                Some(piece) => format!("{}", piece),
+                None => " ".to_string(),
+            })
+            .collect();
+        let row1 = format!(
+            "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
+        );
+        let row2 = format!(
+            "2 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]
+        );
+        let row3 = format!(
+            "3 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[16], v[17], v[18], v[19], v[20], v[21], v[22], v[23]
+        );
+        let row4 = format!(
+            "4 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[24], v[25], v[26], v[27], v[28], v[29], v[30], v[31]
+        );
+        let row5 = format!(
+            "5 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[32], v[33], v[34], v[35], v[36], v[37], v[38], v[39]
+        );
+        let row6 = format!(
+            "6 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[40], v[41], v[42], v[43], v[44], v[45], v[46], v[47]
+        );
+        let row7 = format!(
+            "7 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[48], v[49], v[50], v[51], v[52], v[53], v[54], v[55]
+        );
+        let row8 = format!(
+            "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
+        );
+        // set background colour
+        //write!(f, "\x1B[106m")?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row8)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row7)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row6)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row5)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row4)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row3)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row2)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "{}", row1)?;
+        writeln!(f, "  —------------------------------------------------")?;
+        writeln!(f, "     A     B     C     D     E     F     G     H   ")
+    }
+}
+
+// debug information
+impl fmt::Debug for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "to move: '{:?}'", self.active_colour)?;
+        writeln!(f, "castling rights: '{}'", self.castling_rights)?;
+        writeln!(
+            f,
+            "en passant target: '{:?}'",
+            self.en_passant_target_square
+        )?;
+        writeln!(f, "half-moves: '{:?}'", self.half_move_clock)?;
+        write!(f, "moves: '{:?}'", self.full_move_number)
+    }
+}
 /* ------- T E S T S ---------*/
 
 #[cfg(test)]
-mod conversions {
+mod constructors {
     use super::*;
 
     // piece tests
@@ -598,5 +509,43 @@ mod conversions {
         let coord = Coordinate { file: 'b', rank: 2 };
         let index = 9usize;
         assert_eq!(index, Coordinate::try_into(coord).unwrap());
+    }
+
+    #[test]
+    fn move_from_str() {
+        let from = Coordinate::from_str("e3").unwrap();
+        let destination = Coordinate::from_str("e4").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: None,
+        };
+        assert_eq!(mv, Move::from_str("e3e4").unwrap());
+        // promotion
+        let from = Coordinate::from_str("e7").unwrap();
+        let destination = Coordinate::from_str("e8").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: Some(PieceType::Queen),
+        };
+        assert_eq!(mv, Move::from_str("e7e8q").unwrap());
+    }
+}
+
+#[cfg(test)]
+mod exports {
+    use super::*;
+    #[test]
+    fn fen_export() {
+        let fen_vec: Vec<String> = vec![
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string(),
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2".to_string(),
+            "rn2kb1r/ppp1pppp/8/8/4q3/3P1N1b/PPP1BPnP/RNBQ1K1R b kq - 0 1".to_string(),
+        ];
+        for fen in fen_vec {
+            let board = Board::new(fen.clone()).unwrap();
+            assert_eq!(fen, board.export_fen().unwrap());
+        }
     }
 }
