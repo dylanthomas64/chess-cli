@@ -3,10 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::pieces::{Colour, Piece, PieceType};
 use crate::{
+    coordinate::Coordinate,
     errors::BoardError,
-    moves::{self, Coordinate, Move, MoveType},
+    move_logic::{self, in_check, Move, MoveType},
+    pieces::{Colour, Piece},
 };
 
 // struct to represent castling rights
@@ -88,39 +89,41 @@ impl Board {
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
-    // get squares vec as reference
-    pub fn get_squares(&self) -> &Vec<Option<Piece>> {
-        &self.squares
-    }
-    pub fn get_en_passant_target(&self) -> &Option<Coordinate> {
-        &self.en_passant_target_square
-    }
     pub fn process_move(&mut self, mv: &Move) -> Result<(), BoardError> {
-        let i0: usize = mv.from.try_into().unwrap();
-        let i: usize = mv.destination.try_into()?;
+        let i0: usize = mv.from.into();
+        let i: usize = mv.destination.into();
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
 
-        /*
+        // get Piece to move
+        let piece = match move_type {
+            // if promotion
+            MoveType::PromotionPush | MoveType::PromotionCapture => match mv.promotion {
+                Some(piece_type) => Piece {
+                    piece_type,
+                    colour: self.active_colour,
+                },
+                None => return Err(BoardError::PromotionError),
+            },
+            // if anything else
+            _ => self.squares[i0].unwrap(),
+        };
 
-        if move_type == promotion -> if mv.promotion.is_none() -> Err
+        // clone squares and apply changes
+        // check copy for possible attacks on king
+        let mut squares_copy = self.squares.clone();
+        squares_copy[i] = Some(piece);
+        squares_copy[i0] = None;
 
-        >> does this move put opponent king in check? (only required for PGN '+' notation)
-
-        does this move put this colour king in check?
-
-        create a copy of squares with applied move.
-        check all of opponent's new legal moves. If any index contains this king => Err
-        (maybe check for each legal move one at a time to reduce search time)
-
-        squares = squares_copy
-
-        */
+        if in_check(&self.active_colour, &squares_copy) {
+            return Err(BoardError::InCheck);
+        }
 
         // move OK, apply changes to board
-        let piece = &self.squares[i0].unwrap();
-        self.squares[i] = Some(*(piece));
+
+        self.squares[i] = Some(piece);
         self.squares[i0] = None;
+
         match move_type {
             // add en passant sq
             MoveType::DoublePush(target) => {
@@ -142,46 +145,31 @@ impl Board {
     }
     // check that move is legal
     fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
-        let move_vec = match Self::legal_moves(self, i0) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-        // for (x, m) in &move_vec {
-        //     //println!("[{}] {:?}", x, m);
-        // }
-        // check if index is in vec of legal moves
-        match move_vec.into_iter().find(|(x, _)| *x == i) {
-            Some((_, m)) => Ok(m),
-            None => Err(BoardError::InvalidMove),
-        }
-    }
-
-    // provides a tuple of (possible indexes, move type) that the piece at supplied index can legally move to
-    fn legal_moves(&self, i0: usize) -> Result<Vec<(usize, MoveType)>, BoardError> {
-        let mut move_vec: Vec<(usize, MoveType)> = vec![];
-        //println!("checking legal moves at v[{}]", i0);
+        // check piece is exists
         let piece = match &self.squares[i0] {
             Some(p) => p,
             None => return Err(BoardError::EmptySquare),
         };
+        // check piece is correct colour
         if piece.colour != self.active_colour {
             return Err(BoardError::WrongColour);
         }
-        match piece.piece_type {
-            PieceType::Pawn => move_vec.append(&mut moves::get_pawn_legal_moves(
-                self.get_squares(),
-                i0,
-                &piece.colour,
-                self.get_en_passant_target(),
-            )?),
-            _ => todo!(),
-        }
+        // OK! find all legal moves from squares[i0]
+        let mut legal_moves: Vec<(usize, MoveType)> = vec![];
 
-        if move_vec.is_empty() {
-            println!("empty board");
-            Err(BoardError::NoLegalMoves)
-        } else {
-            Ok(move_vec)
+        move_logic::find_legal_moves(
+            &self.squares,
+            &mut legal_moves,
+            i0,
+            &self.en_passant_target_square,
+        );
+        // for (x, m) in &move_vec {
+        //     //println!("[{}] {:?}", x, m);
+        // }
+        // check if index is in vec of legal moves
+        match legal_moves.into_iter().find(|(x, _)| *x == i) {
+            Some((_, m)) => Ok(m),
+            None => Err(BoardError::InvalidMove),
         }
     }
 
@@ -418,6 +406,70 @@ impl fmt::Display for Board {
     }
 }
 
+impl Board {
+    pub fn display_unicode(&self) {
+        let v: Vec<String> = self
+            .squares
+            .iter()
+            .map(|opt| match opt {
+                Some(piece) => format!("{}", piece.unicode_symbol()),
+                None => " ".to_string(),
+            })
+            .collect();
+        let row1 = format!(
+            "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
+        );
+        let row2 = format!(
+            "2 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]
+        );
+        let row3 = format!(
+            "3 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[16], v[17], v[18], v[19], v[20], v[21], v[22], v[23]
+        );
+        let row4 = format!(
+            "4 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[24], v[25], v[26], v[27], v[28], v[29], v[30], v[31]
+        );
+        let row5 = format!(
+            "5 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[32], v[33], v[34], v[35], v[36], v[37], v[38], v[39]
+        );
+        let row6 = format!(
+            "6 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[40], v[41], v[42], v[43], v[44], v[45], v[46], v[47]
+        );
+        let row7 = format!(
+            "7 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[48], v[49], v[50], v[51], v[52], v[53], v[54], v[55]
+        );
+        let row8 = format!(
+            "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
+        );
+        // set background colour
+        //write!(f, "\x1B[106m")?;
+        println!("  —------------------------------------------------");
+        println!("{}", row8);
+        println!("  —------------------------------------------------");
+        println!("{}", row7);
+        println!("  —------------------------------------------------");
+        println!("{}", row6);
+        println!("  —------------------------------------------------");
+        println!("{}", row5);
+        println!("  —------------------------------------------------");
+        println!("{}", row4);
+        println!("  —------------------------------------------------");
+        println!("{}", row3);
+        println!("  —------------------------------------------------");
+        println!("{}", row2);
+        println!("  —------------------------------------------------");
+        println!("{}", row1);
+        println!("  —------------------------------------------------");
+        println!("     A     B     C     D     E     F     G     H   ");
+    }
+}
 // debug information
 impl fmt::Debug for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -435,29 +487,9 @@ impl fmt::Debug for Board {
 /* ------- T E S T S ---------*/
 
 #[cfg(test)]
-mod constructors {
+mod tests {
     use super::*;
 
-    // piece tests
-    // from char
-    #[test]
-    fn piece_from_char() {
-        let piece: Piece = 'K'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::King);
-        assert_eq!(piece.colour, Colour::White);
-        let piece: Piece = 'q'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::Queen);
-        assert_eq!(piece.colour, Colour::Black);
-        let piece: Piece = 'P'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::Pawn);
-        assert_eq!(piece.colour, Colour::White);
-    }
-    #[test]
-    fn colour_from_str() {
-        assert_eq!(Colour::White, "w".parse().unwrap());
-        assert_eq!(Colour::Black, "b".parse().unwrap());
-        assert_eq!(Err(BoardError::ColourError), "-".parse::<Colour>());
-    }
     #[test]
     fn castling_rights_from_str() {
         let from_str = CastlingRights::from_str("KQkq").unwrap();
@@ -478,64 +510,7 @@ mod constructors {
         };
         assert_eq!(from_str, castling_rights);
     }
-    #[test]
-    fn coord_from_str() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        assert_eq!(coord, Coordinate::from_str("a1").unwrap());
-        let coord = Coordinate { file: 'h', rank: 8 };
-        assert_eq!(coord, Coordinate::from_str("h8").unwrap());
-    }
-    #[test]
-    fn coord_from_usize() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        let index = 0usize;
-        assert_eq!(coord, Coordinate::try_from(index).unwrap());
 
-        let coord = Coordinate { file: 'h', rank: 8 };
-        let index = 63usize;
-        assert_eq!(coord, Coordinate::try_from(index).unwrap());
-    }
-    #[test]
-    fn coord_into_usize() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        let index = 0usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'h', rank: 8 };
-        let index = 63usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'b', rank: 1 };
-        let index = 1usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'b', rank: 2 };
-        let index = 9usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-    }
-
-    #[test]
-    fn move_from_str() {
-        let from = Coordinate::from_str("e3").unwrap();
-        let destination = Coordinate::from_str("e4").unwrap();
-        let mv = Move {
-            from,
-            destination,
-            promotion: None,
-        };
-        assert_eq!(mv, Move::from_str("e3e4").unwrap());
-        // promotion
-        let from = Coordinate::from_str("e7").unwrap();
-        let destination = Coordinate::from_str("e8").unwrap();
-        let mv = Move {
-            from,
-            destination,
-            promotion: Some(PieceType::Queen),
-        };
-        assert_eq!(mv, Move::from_str("e7e8q").unwrap());
-    }
-}
-
-#[cfg(test)]
-mod exports {
-    use super::*;
     #[test]
     fn fen_export() {
         let fen_vec: Vec<String> = vec![
