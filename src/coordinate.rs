@@ -1,4 +1,7 @@
-use std::{fmt::{self, Display}, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use crate::errors::BoardError;
 
@@ -44,10 +47,11 @@ impl FromStr for Coordinate {
         ))
     }
 }
-impl TryInto<usize> for Coordinate {
-    type Error = BoardError;
-    fn try_into(self) -> Result<usize, Self::Error> {
-        let file: usize = match self.file {
+
+
+impl From<Coordinate> for usize {
+    fn from(value: Coordinate) -> Self {
+        let file: usize = match value.file {
             'a' => 0,
             'b' => 1,
             'c' => 2,
@@ -58,14 +62,14 @@ impl TryInto<usize> for Coordinate {
             'h' => 7,
             _ => panic!(),
         };
-        let rank: usize = self.rank - 1;
-        Ok(file + (8 * rank))
+        let rank: usize = value.rank - 1;
+        file + (8 * rank)
     }
 }
-impl TryInto<usize> for &Coordinate {
-    type Error = BoardError;
-    fn try_into(self) -> Result<usize, Self::Error> {
-        let file: usize = match self.file {
+
+impl From<&Coordinate> for usize {
+    fn from(value: &Coordinate) -> Self {
+        let file: usize = match value.file {
             'a' => 0,
             'b' => 1,
             'c' => 2,
@@ -76,10 +80,11 @@ impl TryInto<usize> for &Coordinate {
             'h' => 7,
             _ => panic!(),
         };
-        let rank: usize = self.rank - 1;
-        Ok(file + (8 * rank))
+        let rank: usize = value.rank - 1;
+        file + (8 * rank)
     }
 }
+
 impl TryFrom<usize> for Coordinate {
     type Error = BoardError;
     fn try_from(value: usize) -> Result<Self, Self::Error> {
@@ -97,4 +102,43 @@ impl TryFrom<usize> for Coordinate {
         let rank = (value / 8) + 1;
         Ok(Coordinate { file, rank })
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coord_from_str() {
+        let coord = Coordinate { file: 'a', rank: 1 };
+        assert_eq!(coord, Coordinate::from_str("a1").unwrap());
+        let coord = Coordinate { file: 'h', rank: 8 };
+        assert_eq!(coord, Coordinate::from_str("h8").unwrap());
+    }
+    #[test]
+    fn coord_from_usize() {
+        let coord = Coordinate { file: 'a', rank: 1 };
+        let index = 0usize;
+        assert_eq!(coord, Coordinate::try_from(index).unwrap());
+
+        let coord = Coordinate { file: 'h', rank: 8 };
+        let index = 63usize;
+        assert_eq!(coord, Coordinate::try_from(index).unwrap());
+    }
+    #[test]
+    fn coord_into_usize() {
+        let coord = Coordinate { file: 'a', rank: 1 };
+        let index = 0usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate { file: 'h', rank: 8 };
+        let index = 63usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate { file: 'b', rank: 1 };
+        let index = 1usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+        let coord = Coordinate { file: 'b', rank: 2 };
+        let index = 9usize;
+        assert_eq!(index, Coordinate::try_into(coord).unwrap());
+    }
+
 }

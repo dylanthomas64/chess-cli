@@ -52,3 +52,9 @@ impl Display for BoardError {
     }
 }
 impl std::error::Error for BoardError {}
+
+#[cfg(test)]
+mod tests {
+    //use super::*;
+
+}

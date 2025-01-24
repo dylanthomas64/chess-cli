@@ -1,14 +1,11 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-
 use crate::{
-    pieces::{Colour, PieceType, Piece},
-    errors::BoardError,
     coordinate::Coordinate,
+    errors::BoardError,
+    pieces::{Colour, Piece, PieceType},
 };
-
-
 
 // move struct that provides all necessary information for a uci move
 #[derive(Debug, PartialEq)]
@@ -70,15 +67,35 @@ pub enum MoveType {
     PromotionCapture,
 }
 
-// piece logic
+// find all legal moves from VALID index. If squares[index] will panic
+// modify array of legal_moves in place (for speed)
+pub fn find_legal_moves(squares: &[Option<Piece>], legal_moves: &mut Vec<(usize, MoveType)>, index: usize, en_passant_target: &Option<Coordinate>) {
+    
+    let piece = squares[index].unwrap();
 
-pub fn get_pawn_legal_moves(
+    // create vec of legal moves to be passed around to each
+    //let mut move_vec: Vec<(usize, MoveType)> = vec![];
+    match piece.piece_type {
+        PieceType::Pawn => get_pawn_legal_moves(
+            legal_moves,
+            squares,
+            index,
+            &piece.colour,
+            en_passant_target,
+        ),
+        _ => todo!(),
+    }
+}
+
+// individual piece logic
+
+fn get_pawn_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
     en_passant_target: &Option<Coordinate>,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    let mut move_vec: Vec<(usize, MoveType)> = vec![];
+) {
     match colour {
         Colour::White => {
             // regular moves
@@ -86,13 +103,13 @@ pub fn get_pawn_legal_moves(
             if squares[target].is_none() {
                 // check for promotion
                 if (56..64).contains(&target) {
-                    move_vec.push((target, MoveType::PromotionPush));
+                    legal_moves.push((target, MoveType::PromotionPush));
                 } else {
-                    move_vec.push((target, MoveType::Regular));
+                    legal_moves.push((target, MoveType::Regular));
                     // if piece on starting file and can move 1 extra space -> can double move
                     target += 8;
                     if (8..16).contains(&piece_index) && squares[target].is_none() {
-                        move_vec.push((target, MoveType::DoublePush(target - 8)));
+                        legal_moves.push((target, MoveType::DoublePush(target - 8)));
                     }
                 }
             }
@@ -104,16 +121,16 @@ pub fn get_pawn_legal_moves(
                     if piece.colour == Colour::Black {
                         // check for promotion
                         if (56..64).contains(&target) {
-                            move_vec.push((target, MoveType::PromotionCapture));
+                            legal_moves.push((target, MoveType::PromotionCapture));
                         } else {
-                            move_vec.push((target, MoveType::Capture));
+                            legal_moves.push((target, MoveType::Capture));
                         }
                     }
                 }
                 // check for en passant
                 else if let Some(coord) = en_passant_target {
-                    if target == coord.try_into()? {
-                        move_vec.push((target, MoveType::EnPassant(target - 8)));
+                    if target == coord.try_into().unwrap() {
+                        legal_moves.push((target, MoveType::EnPassant(target - 8)));
                     }
                 }
             }
@@ -126,16 +143,16 @@ pub fn get_pawn_legal_moves(
                     if piece.colour == Colour::Black {
                         // check for promotion
                         if (56..64).contains(&target) {
-                            move_vec.push((target, MoveType::PromotionCapture));
+                            legal_moves.push((target, MoveType::PromotionCapture));
                         } else {
-                            move_vec.push((target, MoveType::Capture));
+                            legal_moves.push((target, MoveType::Capture));
                         }
                     }
                 }
                 // check for en passant
                 else if let Some(coord) = en_passant_target {
-                    if target == coord.try_into()? {
-                        move_vec.push((target, MoveType::EnPassant(target - 8)));
+                    if target == coord.into() {
+                        legal_moves.push((target, MoveType::EnPassant(target - 8)));
                     }
                 }
             }
@@ -146,14 +163,14 @@ pub fn get_pawn_legal_moves(
             if squares[target].is_none() {
                 // check for promotion
                 if (0..8).contains(&target) {
-                    move_vec.push((target, MoveType::PromotionPush));
+                    legal_moves.push((target, MoveType::PromotionPush));
                 } else {
-                    move_vec.push((target, MoveType::Regular));
+                    legal_moves.push((target, MoveType::Regular));
                     // if piece on starting file and can move 1 extra space -> can double move
                     if (48..56).contains(&piece_index) {
                         target -= 8;
                         if squares[target].is_none() {
-                            move_vec.push((target, MoveType::DoublePush(target + 8)));
+                            legal_moves.push((target, MoveType::DoublePush(target + 8)));
                         }
                     }
                 }
@@ -167,16 +184,16 @@ pub fn get_pawn_legal_moves(
                 if let Some(piece) = squares[target] {
                     if piece.colour == Colour::White {
                         if (0..8).contains(&target) {
-                            move_vec.push((target, MoveType::PromotionCapture));
+                            legal_moves.push((target, MoveType::PromotionCapture));
                         } else {
-                            move_vec.push((target, MoveType::Capture));
+                            legal_moves.push((target, MoveType::Capture));
                         }
                     }
                 }
                 // check for en passant
                 else if let Some(coord) = en_passant_target {
-                    if target == coord.try_into()? {
-                        move_vec.push((target, MoveType::EnPassant(target + 8)));
+                    if target == coord.into() {
+                        legal_moves.push((target, MoveType::EnPassant(target + 8)));
                     }
                 }
             }
@@ -188,30 +205,96 @@ pub fn get_pawn_legal_moves(
                 if let Some(piece) = squares[target] {
                     if piece.colour == Colour::White {
                         if (0..8).contains(&target) {
-                            move_vec.push((target, MoveType::PromotionCapture));
+                            legal_moves.push((target, MoveType::PromotionCapture));
                         } else {
-                            move_vec.push((target, MoveType::Capture));
+                            legal_moves.push((target, MoveType::Capture));
                         }
                     }
                 }
                 // check for en passant
                 else if let Some(coord) = en_passant_target {
-                    if target == coord.try_into()? {
-                        move_vec.push((target, MoveType::EnPassant(target + 8)));
+                    if target == coord.into() {
+                        legal_moves.push((target, MoveType::EnPassant(target + 8)));
                     }
                 }
             }
         }
     }
-    Ok(move_vec)
 }
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
-pub fn get_bishop_legal_moves(
+fn get_bishop_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
 ) -> Result<Vec<(usize, MoveType)>, BoardError> {
     todo!()
+}
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+fn get_knight_legal_moves(
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: &Colour,
+) -> Result<Vec<(usize, MoveType)>, BoardError> {
+    todo!()
+}
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+fn get_rook_legal_moves(
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: &Colour,
+) -> Result<Vec<(usize, MoveType)>, BoardError> {
+    todo!()
+}
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+fn get_queen_legal_moves(
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: &Colour,
+) -> Result<Vec<(usize, MoveType)>, BoardError> {
+    todo!()
+}
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+fn get_king_legal_moves(
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: &Colour,
+) -> Result<Vec<(usize, MoveType)>, BoardError> {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn move_from_str() {
+        let from = Coordinate::from_str("e3").unwrap();
+        let destination = Coordinate::from_str("e4").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: None,
+        };
+        assert_eq!(mv, Move::from_str("e3e4").unwrap());
+        // promotion
+        let from = Coordinate::from_str("e7").unwrap();
+        let destination = Coordinate::from_str("e8").unwrap();
+        let mv = Move {
+            from,
+            destination,
+            promotion: Some(PieceType::Queen),
+        };
+        assert_eq!(mv, Move::from_str("e7e8q").unwrap());
+    }
+
 }

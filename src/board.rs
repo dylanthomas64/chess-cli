@@ -5,7 +5,7 @@ use std::{
 
 
 use crate::{
-    pieces::{Colour, Piece, PieceType},
+    pieces::{Colour, Piece},
     errors::BoardError,
     move_logic::{self, Move, MoveType},
     coordinate::Coordinate
@@ -90,16 +90,9 @@ impl Board {
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
-    // get squares vec as reference
-    pub fn get_squares(&self) -> &Vec<Option<Piece>> {
-        &self.squares
-    }
-    pub fn get_en_passant_target(&self) -> &Option<Coordinate> {
-        &self.en_passant_target_square
-    }
     pub fn process_move(&mut self, mv: &Move) -> Result<(), BoardError> {
-        let i0: usize = mv.from.try_into().unwrap();
-        let i: usize = mv.destination.try_into()?;
+        let i0: usize = mv.from.into();
+        let i: usize = mv.destination.into();
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
 
@@ -117,6 +110,14 @@ impl Board {
             _ => self.squares[i0].unwrap(),
         };
 
+
+        // clone squares and apply changes
+        // check copy for possible attacks on king
+        let mut squares_copy = self.squares.clone();
+        squares_copy[i] = Some(piece);
+        squares_copy[i0] = None;
+
+        // in_check(colour: Colour, squares: &[Option<Piece>]) -> Bool
         /*
 
 
@@ -159,48 +160,30 @@ impl Board {
     }
     // check that move is legal
     fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
-        let move_vec = match Self::legal_moves(self, i0) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
+        // check piece is exists
+        let piece = match &self.squares[i0] {
+            Some(p) => p,
+            None => return Err(BoardError::EmptySquare),
         };
+        // check piece is correct colour
+        if piece.colour != self.active_colour {
+            return Err(BoardError::WrongColour);
+        }
+        // OK! find all legal moves from squares[i0]
+        let mut legal_moves: Vec<(usize, MoveType)> = vec![];
+
+        move_logic::find_legal_moves(&self.squares, &mut legal_moves, i0, &self.en_passant_target_square);
         // for (x, m) in &move_vec {
         //     //println!("[{}] {:?}", x, m);
         // }
         // check if index is in vec of legal moves
-        match move_vec.into_iter().find(|(x, _)| *x == i) {
+        match legal_moves.into_iter().find(|(x, _)| *x == i) {
             Some((_, m)) => Ok(m),
             None => Err(BoardError::InvalidMove),
         }
     }
 
-    // provides a tuple of (possible indexes, move type) that the piece at supplied index can legally move to
-    fn legal_moves(&self, i0: usize) -> Result<Vec<(usize, MoveType)>, BoardError> {
-        let mut move_vec: Vec<(usize, MoveType)> = vec![];
-        //println!("checking legal moves at v[{}]", i0);
-        let piece = match &self.squares[i0] {
-            Some(p) => p,
-            None => return Err(BoardError::EmptySquare),
-        };
-        if piece.colour != self.active_colour {
-            return Err(BoardError::WrongColour);
-        }
-        match piece.piece_type {
-            PieceType::Pawn => move_vec.append(&mut move_logic::get_pawn_legal_moves(
-                self.get_squares(),
-                i0,
-                &piece.colour,
-                self.get_en_passant_target(),
-            )?),
-            _ => todo!(),
-        }
-
-        if move_vec.is_empty() {
-            println!("empty board");
-            Err(BoardError::NoLegalMoves)
-        } else {
-            Ok(move_vec)
-        }
-    }
+   
 
     #[allow(dead_code)]
     fn export_fen(&self) -> Result<String, BoardError> {
@@ -452,29 +435,10 @@ impl fmt::Debug for Board {
 /* ------- T E S T S ---------*/
 
 #[cfg(test)]
-mod constructors {
+mod tests {
     use super::*;
 
-    // piece tests
-    // from char
-    #[test]
-    fn piece_from_char() {
-        let piece: Piece = 'K'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::King);
-        assert_eq!(piece.colour, Colour::White);
-        let piece: Piece = 'q'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::Queen);
-        assert_eq!(piece.colour, Colour::Black);
-        let piece: Piece = 'P'.try_into().unwrap();
-        assert_eq!(piece.piece_type, PieceType::Pawn);
-        assert_eq!(piece.colour, Colour::White);
-    }
-    #[test]
-    fn colour_from_str() {
-        assert_eq!(Colour::White, "w".parse().unwrap());
-        assert_eq!(Colour::Black, "b".parse().unwrap());
-        assert_eq!(Err(BoardError::ColourError), "-".parse::<Colour>());
-    }
+    
     #[test]
     fn castling_rights_from_str() {
         let from_str = CastlingRights::from_str("KQkq").unwrap();
@@ -495,64 +459,7 @@ mod constructors {
         };
         assert_eq!(from_str, castling_rights);
     }
-    #[test]
-    fn coord_from_str() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        assert_eq!(coord, Coordinate::from_str("a1").unwrap());
-        let coord = Coordinate { file: 'h', rank: 8 };
-        assert_eq!(coord, Coordinate::from_str("h8").unwrap());
-    }
-    #[test]
-    fn coord_from_usize() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        let index = 0usize;
-        assert_eq!(coord, Coordinate::try_from(index).unwrap());
 
-        let coord = Coordinate { file: 'h', rank: 8 };
-        let index = 63usize;
-        assert_eq!(coord, Coordinate::try_from(index).unwrap());
-    }
-    #[test]
-    fn coord_into_usize() {
-        let coord = Coordinate { file: 'a', rank: 1 };
-        let index = 0usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'h', rank: 8 };
-        let index = 63usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'b', rank: 1 };
-        let index = 1usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-        let coord = Coordinate { file: 'b', rank: 2 };
-        let index = 9usize;
-        assert_eq!(index, Coordinate::try_into(coord).unwrap());
-    }
-
-    #[test]
-    fn move_from_str() {
-        let from = Coordinate::from_str("e3").unwrap();
-        let destination = Coordinate::from_str("e4").unwrap();
-        let mv = Move {
-            from,
-            destination,
-            promotion: None,
-        };
-        assert_eq!(mv, Move::from_str("e3e4").unwrap());
-        // promotion
-        let from = Coordinate::from_str("e7").unwrap();
-        let destination = Coordinate::from_str("e8").unwrap();
-        let mv = Move {
-            from,
-            destination,
-            promotion: Some(PieceType::Queen),
-        };
-        assert_eq!(mv, Move::from_str("e7e8q").unwrap());
-    }
-}
-
-#[cfg(test)]
-mod exports {
-    use super::*;
     #[test]
     fn fen_export() {
         let fen_vec: Vec<String> = vec![
@@ -565,4 +472,5 @@ mod exports {
             assert_eq!(fen, board.export_fen().unwrap());
         }
     }
+    
 }

@@ -111,3 +111,28 @@ impl Display for Piece {
         write!(f, "\x1B[30m")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn piece_from_char() {
+        let piece: Piece = 'K'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::King);
+        assert_eq!(piece.colour, Colour::White);
+        let piece: Piece = 'q'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::Queen);
+        assert_eq!(piece.colour, Colour::Black);
+        let piece: Piece = 'P'.try_into().unwrap();
+        assert_eq!(piece.piece_type, PieceType::Pawn);
+        assert_eq!(piece.colour, Colour::White);
+    }
+    #[test]
+    fn colour_from_str() {
+        assert_eq!(Colour::White, "w".parse().unwrap());
+        assert_eq!(Colour::Black, "b".parse().unwrap());
+        assert_eq!(Err(BoardError::ColourError), "-".parse::<Colour>());
+    }
+
+}

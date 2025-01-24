@@ -1,10 +1,9 @@
 use std::str::FromStr;
 mod board;
+mod coordinate;
 mod errors;
 mod move_logic;
 mod pieces;
-mod coordinate;
-
 
 use board::Board;
 use errors::BoardError;
