@@ -134,5 +134,4 @@ mod tests {
         assert_eq!(Colour::Black, "b".parse().unwrap());
         assert_eq!(Err(BoardError::ColourError), "-".parse::<Colour>());
     }
-
 }

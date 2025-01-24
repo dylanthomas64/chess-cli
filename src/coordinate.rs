@@ -48,7 +48,6 @@ impl FromStr for Coordinate {
     }
 }
 
-
 impl From<Coordinate> for usize {
     fn from(value: Coordinate) -> Self {
         let file: usize = match value.file {
@@ -140,5 +139,4 @@ mod tests {
         let index = 9usize;
         assert_eq!(index, Coordinate::try_into(coord).unwrap());
     }
-
 }

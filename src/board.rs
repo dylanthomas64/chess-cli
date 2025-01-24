@@ -3,9 +3,11 @@ use std::{
     str::FromStr,
 };
 
-
 use crate::{
-    coordinate::Coordinate, errors::BoardError, move_logic::{self, in_check, Move, MoveType}, pieces::{Colour, Piece}
+    coordinate::Coordinate,
+    errors::BoardError,
+    move_logic::{self, in_check, Move, MoveType},
+    pieces::{Colour, Piece},
 };
 
 // struct to represent castling rights
@@ -107,32 +109,16 @@ impl Board {
             _ => self.squares[i0].unwrap(),
         };
 
-
         // clone squares and apply changes
         // check copy for possible attacks on king
         let mut squares_copy = self.squares.clone();
         squares_copy[i] = Some(piece);
         squares_copy[i0] = None;
+
         if in_check(&self.active_colour, &squares_copy) {
-            println!("in check!");
+            return Err(BoardError::InCheck)
         }
-        // in_check(colour: Colour, squares: &[Option<Piece>]) -> Bool
-        /*
-
-
-
-        >> does this move put opponent king in check? (only required for PGN '+' notation)
-
-        does this move put this colour king in check?
-
-        create a copy of squares with applied move.
-        check all of opponent's new legal moves. If any index contains this king => Err
-        (maybe check for each legal move one at a time to reduce search time)
-
-        squares = squares_copy
-
-        */
-
+        
         // move OK, apply changes to board
 
         self.squares[i] = Some(piece);
@@ -171,7 +157,12 @@ impl Board {
         // OK! find all legal moves from squares[i0]
         let mut legal_moves: Vec<(usize, MoveType)> = vec![];
 
-        move_logic::find_legal_moves(&self.squares, &mut legal_moves, i0, &self.en_passant_target_square);
+        move_logic::find_legal_moves(
+            &self.squares,
+            &mut legal_moves,
+            i0,
+            &self.en_passant_target_square,
+        );
         // for (x, m) in &move_vec {
         //     //println!("[{}] {:?}", x, m);
         // }
@@ -181,8 +172,6 @@ impl Board {
             None => Err(BoardError::InvalidMove),
         }
     }
-
-   
 
     #[allow(dead_code)]
     fn export_fen(&self) -> Result<String, BoardError> {
@@ -437,7 +426,6 @@ impl fmt::Debug for Board {
 mod tests {
     use super::*;
 
-    
     #[test]
     fn castling_rights_from_str() {
         let from_str = CastlingRights::from_str("KQkq").unwrap();
@@ -471,5 +459,4 @@ mod tests {
             assert_eq!(fen, board.export_fen().unwrap());
         }
     }
-    
 }

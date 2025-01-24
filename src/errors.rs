@@ -20,6 +20,7 @@ pub enum BoardError {
     NoLegalMoves,
     WrongColour,
     EmptySquare,
+    InCheck,
     PgnError,
     UciError,
 }
@@ -45,6 +46,7 @@ impl Display for BoardError {
             Self::NoLegalMoves => "no possible legal moves from start square",
             Self::WrongColour => "can't move opponents piece!",
             Self::EmptySquare => "start square is empty",
+            Self::InCheck => "king must escape check!",
             Self::PgnError => "error pgn",
             Self::UciError => "error uci",
         };
@@ -56,5 +58,4 @@ impl std::error::Error for BoardError {}
 #[cfg(test)]
 mod tests {
     //use super::*;
-
 }

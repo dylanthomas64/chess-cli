@@ -69,8 +69,12 @@ pub enum MoveType {
 
 // find all legal moves from VALID index. If squares[index] will panic
 // modify array of legal_moves in place (for speed)
-pub fn find_legal_moves(squares: &[Option<Piece>], legal_moves: &mut Vec<(usize, MoveType)>, index: usize, en_passant_target: &Option<Coordinate>) {
-    
+pub fn find_legal_moves(
+    squares: &[Option<Piece>],
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    index: usize,
+    en_passant_target: &Option<Coordinate>,
+) {
     let piece = squares[index].unwrap();
 
     // create vec of legal moves to be passed around to each
@@ -83,13 +87,16 @@ pub fn find_legal_moves(squares: &[Option<Piece>], legal_moves: &mut Vec<(usize,
             &piece.colour,
             en_passant_target,
         ),
-        _ => todo!(),
+        PieceType::Knight => {get_knight_legal_moves(legal_moves, squares, index, &piece.colour);},
+        PieceType::Bishop => {get_bishop_legal_moves(legal_moves, squares, index, &piece.colour);},
+        PieceType::Rook => {get_rook_legal_moves(legal_moves, squares, index, &piece.colour);},
+        PieceType::Queen => {get_queen_legal_moves(legal_moves, squares, index, &piece.colour);},
+        PieceType::King => {get_king_legal_moves(legal_moves, squares, index, &piece.colour);}
     }
 }
 
 // is given colour currently in check?
 pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
-
     let opp_colour = match this_colour {
         Colour::White => Colour::Black,
         Colour::Black => Colour::White,
@@ -99,32 +106,29 @@ pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
 
     // iterator of all pieces
     let piece_it = squares
-    .iter()
-    .enumerate()
-    .filter(|(_i, &x)| x.is_some())
-    .map(|(_i, x)| (_i, x.unwrap()));
+        .iter()
+        .enumerate()
+        .filter(|(_i, &x)| x.is_some())
+        .map(|(_i, x)| (_i, x.unwrap()));
 
-    let (king_location, _) = piece_it.clone().find(|(_, x)| x.piece_type == PieceType::King && x.colour == *this_colour).unwrap();
-
+    let (king_location, _) = piece_it
+        .clone()
+        .find(|(_, x)| x.piece_type == PieceType::King && x.colour == *this_colour)
+        .unwrap();
 
     piece_it
-    .filter(|(_i, x)| x.colour == opp_colour)
-    // ^ an iterator of opponent piece indexes ^
-    .for_each(|(i, _)| find_legal_moves(squares, &mut legal_moves, i, &None)); // king cannot exist in en passant target sq
-
+        .filter(|(_i, x)| x.colour == opp_colour)
+        // ^ an iterator of opponent piece indexes ^
+        .for_each(|(i, _)| find_legal_moves(squares, &mut legal_moves, i, &None)); // king cannot exist in en passant target sq
 
     for (index, _) in legal_moves {
         if king_location == index {
-            return true
+            return true;
         }
     }
 
     false
 }
-
-
-
-
 
 // Individual piece logic
 
@@ -268,8 +272,119 @@ fn get_bishop_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    todo!()
+) {
+    let mut col = *colour;
+    col.change_colour();
+
+    let range = 0..64usize;
+
+    let mut target: usize;
+
+    // search up-right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            target = piece_index + (9 * x);
+            // not wrapped h->a file
+            if range.contains(&target) && target % 8 != 0 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece.colour == col {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                        legal_moves.push((target, MoveType::Regular));
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // down-right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            if let Some(target) = usize::checked_sub(piece_index + x, 8 * x) {
+                // not wrapped h->a file
+                if target % 8 != 0 {
+                    match squares[target] {
+                        // hit piece
+                        Some(piece) => {
+                            if piece.colour == col {
+                                legal_moves.push((target, MoveType::Capture));
+                            }
+                            break;
+                        }
+                        None => {
+                            legal_moves.push((target, MoveType::Regular));
+                        }
+                    }
+                } else {
+                    // out of range
+                    break;
+                }
+            }
+        }
+    }
+
+    // search up-left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            target = piece_index + (8 * x) - x;
+            // not wrapped a->h file
+            if range.contains(&target) && target % 8 != 7 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece.colour == col {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                        legal_moves.push((target, MoveType::Regular));
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // search down-left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            if let Some(target) = usize::checked_sub(piece_index, 9 * x) {
+                // not wrapped a->h file
+                if target % 8 != 7 {
+                    match squares[target] {
+                        // hit piece
+                        Some(piece) => {
+                            if piece.colour == col {
+                                legal_moves.push((target, MoveType::Capture));
+                            }
+                            break;
+                        }
+                        None => {
+                            legal_moves.push((target, MoveType::Regular));
+                        }
+                    }
+                } else {
+                    // out of range
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -279,8 +394,26 @@ fn get_knight_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    todo!()
+) {
+    let range = 0..64i8;
+    let k: [i8; 8] = [6, 10, 15, 17, -6, -10, -15, -17];
+
+    let mut target: i8;
+    for x in k {
+        target = piece_index as i8 + x;
+        if range.contains(&target) {
+            match squares[target as usize] {
+                Some(piece) => {
+                    if &piece.colour != colour {
+                        legal_moves.push((target as usize, MoveType::Capture));
+                    }
+                }
+                None => {
+                    legal_moves.push((target as usize, MoveType::Regular));
+                }
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -290,9 +423,105 @@ fn get_rook_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    // search up until
-    todo!()
+) {
+    let mut col = *colour;
+    col.change_colour();
+
+    let range = 0..64usize;
+
+    let mut target: usize;
+
+    // search up
+    for x in 1..8usize {
+        target = piece_index + (8 * x);
+        if range.contains(&target) {
+            match squares[target] {
+                // hit piece
+                Some(piece) => {
+                    if piece.colour == col {
+                        legal_moves.push((target, MoveType::Capture));
+                    }
+                    break;
+                }
+                None => {
+                    legal_moves.push((target, MoveType::Regular));
+                }
+            }
+        } else {
+            // out of range
+            break;
+        }
+    }
+
+    // search down
+    for x in 1..8usize {
+        if let Some(target) = usize::checked_sub(piece_index, 8 * x) {
+            match squares[target] {
+                // hit piece
+                Some(piece) => {
+                    if piece.colour == col {
+                        legal_moves.push((target, MoveType::Capture));
+                    }
+                    break;
+                }
+                None => {
+                    legal_moves.push((target, MoveType::Regular));
+                }
+            }
+        }
+    }
+
+    // search right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            target = piece_index + x;
+            // not wrapped from h->a file
+            if target % 8 != 0 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece.colour == col {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                        legal_moves.push((target, MoveType::Regular));
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // search left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            let target = piece_index - x;
+            // not wrapped from a->h file
+            if target % 8 != 7 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece.colour == col {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                        legal_moves.push((target, MoveType::Regular));
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -302,8 +531,9 @@ fn get_queen_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    todo!()
+) {
+    get_bishop_legal_moves(legal_moves, squares, piece_index, colour);
+    get_rook_legal_moves(legal_moves, squares, piece_index, colour);
 }
 
 #[allow(dead_code)]
@@ -313,8 +543,26 @@ fn get_king_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
-) -> Result<Vec<(usize, MoveType)>, BoardError> {
-    todo!()
+) {
+    let range = 0..64i8;
+    let k: [i8; 8] = [7, 8, 9, 1, -7, -8, -9, -1];
+
+    let mut target: i8;
+    for x in k {
+        target = piece_index as i8 + x;
+        if range.contains(&target) {
+            match squares[target as usize] {
+                Some(piece) => {
+                    if &piece.colour != colour {
+                        legal_moves.push((target as usize, MoveType::Capture));
+                    }
+                }
+                None => {
+                    legal_moves.push((target as usize, MoveType::Regular));
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -341,5 +589,4 @@ mod tests {
         };
         assert_eq!(mv, Move::from_str("e7e8q").unwrap());
     }
-
 }
