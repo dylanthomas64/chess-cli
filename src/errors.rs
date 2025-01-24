@@ -21,7 +21,7 @@ pub enum BoardError {
     WrongColour,
     EmptySquare,
     InCheck,
-    PgnError,
+    PgnCreation,
     UciError,
 }
 
@@ -47,7 +47,7 @@ impl Display for BoardError {
             Self::WrongColour => "can't move opponents piece!",
             Self::EmptySquare => "start square is empty",
             Self::InCheck => "king must escape check!",
-            Self::PgnError => "error pgn",
+            Self::PgnCreation => "error reading pgn file",
             Self::UciError => "error uci",
         };
         write!(f, "{}", error_msg)

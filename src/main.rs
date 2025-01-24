@@ -1,21 +1,39 @@
-use std::str::FromStr;
+use core::fmt;
+use std::{collections::HashMap, fs, str::FromStr};
 mod board;
 mod coordinate;
 mod errors;
 mod move_logic;
 mod pieces;
+mod pgn;
 
 use board::Board;
 use errors::BoardError;
 use move_logic::Move;
+use pgn::Pgn;
+
+
+
 
 fn main() {
+    let pgn_str = pgn();
+    let pgn = pgn_str.parse::<Pgn>().unwrap();
+    println!("{}", pgn);
+    /*
+    for item in split {
+        println!("{}", item);
+    } */
+    
+
+
+    /* 
     let result = run();
     match result {
         Ok(_) => println!("finished!"),
         Err(e) => eprintln!("{}", e),
     }
     println!("exiting...")
+    */
 }
 
 fn run() -> Result<(), BoardError> {
@@ -32,4 +50,12 @@ fn run() -> Result<(), BoardError> {
     }
     println!("{:?}", board);
     Ok(())
+}
+
+
+fn pgn() -> String {
+    let mut entry = fs::read_dir("pgn").expect("error opening pgn directory");
+    let file_name = entry.next().unwrap().unwrap().path();
+    fs::read_to_string(file_name).expect("error opening file")
+
 }
