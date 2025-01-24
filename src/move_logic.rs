@@ -87,7 +87,46 @@ pub fn find_legal_moves(squares: &[Option<Piece>], legal_moves: &mut Vec<(usize,
     }
 }
 
-// individual piece logic
+// is given colour currently in check?
+pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
+
+    let opp_colour = match this_colour {
+        Colour::White => Colour::Black,
+        Colour::Black => Colour::White,
+    };
+
+    let mut legal_moves: Vec<(usize, MoveType)> = vec![];
+
+    // iterator of all pieces
+    let piece_it = squares
+    .iter()
+    .enumerate()
+    .filter(|(_i, &x)| x.is_some())
+    .map(|(_i, x)| (_i, x.unwrap()));
+
+    let (king_location, _) = piece_it.clone().find(|(_, x)| x.piece_type == PieceType::King && x.colour == *this_colour).unwrap();
+
+
+    piece_it
+    .filter(|(_i, x)| x.colour == opp_colour)
+    // ^ an iterator of opponent piece indexes ^
+    .for_each(|(i, _)| find_legal_moves(squares, &mut legal_moves, i, &None)); // king cannot exist in en passant target sq
+
+
+    for (index, _) in legal_moves {
+        if king_location == index {
+            return true
+        }
+    }
+
+    false
+}
+
+
+
+
+
+// Individual piece logic
 
 fn get_pawn_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
@@ -129,7 +168,7 @@ fn get_pawn_legal_moves(
                 }
                 // check for en passant
                 else if let Some(coord) = en_passant_target {
-                    if target == coord.try_into().unwrap() {
+                    if target == coord.into() {
                         legal_moves.push((target, MoveType::EnPassant(target - 8)));
                     }
                 }
@@ -225,6 +264,7 @@ fn get_pawn_legal_moves(
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn get_bishop_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
@@ -235,6 +275,7 @@ fn get_bishop_legal_moves(
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn get_knight_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
@@ -245,16 +286,19 @@ fn get_knight_legal_moves(
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn get_rook_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
 ) -> Result<Vec<(usize, MoveType)>, BoardError> {
+    // search up until
     todo!()
 }
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn get_queen_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
@@ -265,6 +309,7 @@ fn get_queen_legal_moves(
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn get_king_legal_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,

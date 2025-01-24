@@ -5,10 +5,7 @@ use std::{
 
 
 use crate::{
-    pieces::{Colour, Piece},
-    errors::BoardError,
-    move_logic::{self, Move, MoveType},
-    coordinate::Coordinate
+    coordinate::Coordinate, errors::BoardError, move_logic::{self, in_check, Move, MoveType}, pieces::{Colour, Piece}
 };
 
 // struct to represent castling rights
@@ -116,7 +113,9 @@ impl Board {
         let mut squares_copy = self.squares.clone();
         squares_copy[i] = Some(piece);
         squares_copy[i0] = None;
-
+        if in_check(&self.active_colour, &squares_copy) {
+            println!("in check!");
+        }
         // in_check(colour: Colour, squares: &[Option<Piece>]) -> Bool
         /*
 
