@@ -116,9 +116,9 @@ impl Board {
         squares_copy[i0] = None;
 
         if in_check(&self.active_colour, &squares_copy) {
-            return Err(BoardError::InCheck)
+            return Err(BoardError::InCheck);
         }
-        
+
         // move OK, apply changes to board
 
         self.squares[i] = Some(piece);
@@ -406,6 +406,70 @@ impl fmt::Display for Board {
     }
 }
 
+impl Board {
+    pub fn display_unicode(&self) {
+        let v: Vec<String> = self
+            .squares
+            .iter()
+            .map(|opt| match opt {
+                Some(piece) => format!("{}", piece.unicode_symbol()),
+                None => " ".to_string(),
+            })
+            .collect();
+        let row1 = format!(
+            "1 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]
+        );
+        let row2 = format!(
+            "2 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]
+        );
+        let row3 = format!(
+            "3 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[16], v[17], v[18], v[19], v[20], v[21], v[22], v[23]
+        );
+        let row4 = format!(
+            "4 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[24], v[25], v[26], v[27], v[28], v[29], v[30], v[31]
+        );
+        let row5 = format!(
+            "5 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[32], v[33], v[34], v[35], v[36], v[37], v[38], v[39]
+        );
+        let row6 = format!(
+            "6 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[40], v[41], v[42], v[43], v[44], v[45], v[46], v[47]
+        );
+        let row7 = format!(
+            "7 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[48], v[49], v[50], v[51], v[52], v[53], v[54], v[55]
+        );
+        let row8 = format!(
+            "8 |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |  {}  |",
+            v[56], v[57], v[58], v[59], v[60], v[61], v[62], v[63]
+        );
+        // set background colour
+        //write!(f, "\x1B[106m")?;
+        println!("  —------------------------------------------------");
+        println!("{}", row8);
+        println!("  —------------------------------------------------");
+        println!("{}", row7);
+        println!("  —------------------------------------------------");
+        println!("{}", row6);
+        println!("  —------------------------------------------------");
+        println!("{}", row5);
+        println!("  —------------------------------------------------");
+        println!("{}", row4);
+        println!("  —------------------------------------------------");
+        println!("{}", row3);
+        println!("  —------------------------------------------------");
+        println!("{}", row2);
+        println!("  —------------------------------------------------");
+        println!("{}", row1);
+        println!("  —------------------------------------------------");
+        println!("     A     B     C     D     E     F     G     H   ");
+    }
+}
 // debug information
 impl fmt::Debug for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -87,11 +87,21 @@ pub fn find_legal_moves(
             &piece.colour,
             en_passant_target,
         ),
-        PieceType::Knight => {get_knight_legal_moves(legal_moves, squares, index, &piece.colour);},
-        PieceType::Bishop => {get_bishop_legal_moves(legal_moves, squares, index, &piece.colour);},
-        PieceType::Rook => {get_rook_legal_moves(legal_moves, squares, index, &piece.colour);},
-        PieceType::Queen => {get_queen_legal_moves(legal_moves, squares, index, &piece.colour);},
-        PieceType::King => {get_king_legal_moves(legal_moves, squares, index, &piece.colour);}
+        PieceType::Knight => {
+            get_knight_legal_moves(legal_moves, squares, index, &piece.colour);
+        }
+        PieceType::Bishop => {
+            get_bishop_legal_moves(legal_moves, squares, index, &piece.colour);
+        }
+        PieceType::Rook => {
+            get_rook_legal_moves(legal_moves, squares, index, &piece.colour);
+        }
+        PieceType::Queen => {
+            get_queen_legal_moves(legal_moves, squares, index, &piece.colour);
+        }
+        PieceType::King => {
+            get_king_legal_moves(legal_moves, squares, index, &piece.colour);
+        }
     }
 }
 

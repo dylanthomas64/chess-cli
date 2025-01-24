@@ -28,7 +28,7 @@ fn run() -> Result<(), BoardError> {
     for mv_str in move_vec {
         let mv = Move::from_str(mv_str)?;
         board.process_move(&mv)?;
-        println!("{}", board);
+        board.display_unicode();
     }
     println!("{:?}", board);
     Ok(())

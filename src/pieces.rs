@@ -112,6 +112,33 @@ impl Display for Piece {
     }
 }
 
+impl Piece {
+    pub fn unicode_symbol(&self) -> String {
+        
+        if self.colour == Colour::White {
+            let p = match &self.piece_type {
+                PieceType::Pawn => "♟",
+                PieceType::Bishop => "♝",
+                PieceType::Knight => "♞",
+                PieceType::Rook => "♜",
+                PieceType::Queen => "♛",
+                PieceType::King => "♚",
+            };
+            format!("\x1B[36m{}\x1B[30m", p)
+        } else {
+            let p = match &self.piece_type {
+                PieceType::Pawn => "♙",
+                PieceType::Bishop => "♗",
+                PieceType::Knight => "♘",
+                PieceType::Rook => "♖",
+                PieceType::Queen => "♕",
+                PieceType::King => "♔",
+            };
+            format!("\x1B[31m{}\x1B[30m", p)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
