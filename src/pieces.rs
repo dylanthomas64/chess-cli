@@ -114,7 +114,6 @@ impl Display for Piece {
 
 impl Piece {
     pub fn unicode_symbol(&self) -> String {
-        
         if self.colour == Colour::White {
             let p = match &self.piece_type {
                 PieceType::Pawn => "♟",

@@ -1,13 +1,14 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use crate::board::CastlingRights;
 use crate::{
     coordinate::Coordinate,
     errors::BoardError,
     pieces::{Colour, Piece, PieceType},
 };
 
-// move struct that provides all necessary information for a uci move
+// UCI move struct
 #[derive(Debug, PartialEq)]
 pub struct Move {
     pub from: Coordinate,
@@ -74,6 +75,7 @@ pub fn find_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     index: usize,
     en_passant_target: &Option<Coordinate>,
+    castling_rights: Option<CastlingRights>,
 ) {
     let piece = squares[index].unwrap();
 
@@ -100,12 +102,14 @@ pub fn find_legal_moves(
             get_queen_legal_moves(legal_moves, squares, index, &piece.colour);
         }
         PieceType::King => {
-            get_king_legal_moves(legal_moves, squares, index, &piece.colour);
+            get_king_legal_moves(legal_moves, squares, index, &piece.colour, castling_rights);
+            // castling not yet implemented!
+            // todo!()
         }
     }
 }
 
-// is given colour currently in check?
+// is given colour currently in check? ie. is it currently in view of / can be be attacked by on the next move
 pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
     let opp_colour = match this_colour {
         Colour::White => Colour::Black,
@@ -129,7 +133,7 @@ pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
     piece_it
         .filter(|(_i, x)| x.colour == opp_colour)
         // ^ an iterator of opponent piece indexes ^
-        .for_each(|(i, _)| find_legal_moves(squares, &mut legal_moves, i, &None)); // king cannot exist in en passant target sq
+        .for_each(|(i, _)| find_legal_moves(squares, &mut legal_moves, i, &None, None)); // king cannot exist in en passant target sq
 
     for (index, _) in legal_moves {
         if king_location == index {
@@ -553,6 +557,7 @@ fn get_king_legal_moves(
     squares: &[Option<Piece>],
     piece_index: usize,
     colour: &Colour,
+    castling_rights: Option<CastlingRights>,
 ) {
     let range = 0..64i8;
     let k: [i8; 8] = [7, 8, 9, 1, -7, -8, -9, -1];
@@ -569,6 +574,41 @@ fn get_king_legal_moves(
                 }
                 None => {
                     legal_moves.push((target as usize, MoveType::Regular));
+                }
+            }
+        }
+    }
+
+    // check for castling
+    if let Some(c) = castling_rights {
+        match colour {
+            Colour::White => {
+                if c.k_w && squares[piece_index + 1].is_none() && squares[piece_index + 2].is_none()
+                {
+                    legal_moves.push((piece_index + 2, MoveType::CastleKingSide))
+                }
+                if c.q_w
+                    && squares[piece_index - 1].is_none()
+                    && squares[piece_index - 2].is_none()
+                    && squares[piece_index - 3].is_none()
+                {
+                    legal_moves.push((piece_index - 2, MoveType::CastleQueenSide))
+                }
+                //if squares[index + 1].is_none() && squares[index + 2]
+
+                // if queenside rights
+            }
+            Colour::Black => {
+                if c.k_b && squares[piece_index + 1].is_none() && squares[piece_index + 2].is_none()
+                {
+                    legal_moves.push((piece_index + 2, MoveType::CastleKingSide))
+                }
+                if c.q_b
+                    && squares[piece_index - 1].is_none()
+                    && squares[piece_index - 2].is_none()
+                    && squares[piece_index - 3].is_none()
+                {
+                    legal_moves.push((piece_index - 2, MoveType::CastleQueenSide))
                 }
             }
         }

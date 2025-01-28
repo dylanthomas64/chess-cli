@@ -7,18 +7,18 @@ use crate::{
     coordinate::Coordinate,
     errors::BoardError,
     move_logic::{self, in_check, Move, MoveType},
-    pieces::{Colour, Piece},
+    pieces::{Colour, Piece, PieceType},
 };
 
 // struct to represent castling rights
-#[derive(Debug, PartialEq)]
-struct CastlingRights {
+#[derive(Debug, PartialEq, Clone)]
+pub struct CastlingRights {
     //white side
-    k_w: bool,
-    q_w: bool,
+    pub k_w: bool,
+    pub q_w: bool,
     //black side
-    k_b: bool,
-    q_b: bool,
+    pub k_b: bool,
+    pub q_b: bool,
 }
 impl Display for CastlingRights {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -89,13 +89,14 @@ impl Board {
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
     }
-    pub fn process_move(&mut self, mv: &Move) -> Result<(), BoardError> {
+
+    pub fn process_uci_move(&mut self, mv: &Move) -> Result<(), BoardError> {
         let i0: usize = mv.from.into();
         let i: usize = mv.destination.into();
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
 
-        // get Piece to move
+        // get Piece to move (only imported for promotions)
         let piece = match move_type {
             // if promotion
             MoveType::PromotionPush | MoveType::PromotionCapture => match mv.promotion {
@@ -112,8 +113,39 @@ impl Board {
         // clone squares and apply changes
         // check copy for possible attacks on king
         let mut squares_copy = self.squares.clone();
-        squares_copy[i] = Some(piece);
-        squares_copy[i0] = None;
+
+        match move_type {
+            MoveType::CastleKingSide => {
+                // make king at destination
+                squares_copy[i] = Some(piece);
+                // copy adjacent rook to otherside
+                squares_copy[i - 1] = squares_copy[i + 1];
+                // remove old king
+                squares_copy[i0] = None;
+                // remove old rook
+                squares_copy[i + 1] = None;
+            }
+            MoveType::CastleQueenSide => {
+                // make king at destination
+                squares_copy[i] = Some(piece);
+                // copy adjacent rook to otherside
+                squares_copy[i + 1] = squares_copy[i - 2];
+                // remove old king
+                squares_copy[i0] = None;
+                // remove old rook
+                squares_copy[i - 3] = None;
+            }
+            // remove en passant sq
+            MoveType::EnPassant(captured) => {
+                squares_copy[captured] = None;
+                squares_copy[i] = Some(piece);
+                squares_copy[i0] = None;
+            }
+            _ => {
+                squares_copy[i] = Some(piece);
+                squares_copy[i0] = None;
+            }
+        }
 
         if in_check(&self.active_colour, &squares_copy) {
             return Err(BoardError::InCheck);
@@ -121,20 +153,69 @@ impl Board {
 
         // move OK, apply changes to board
 
-        self.squares[i] = Some(piece);
-        self.squares[i0] = None;
+        self.squares = squares_copy;
 
+        // make changes to board attributes
+        // assume reset target sq to none (will be changed below if double pawn push)
+        self.en_passant_target_square = None;
         match move_type {
             // add en passant sq
             MoveType::DoublePush(target) => {
                 self.en_passant_target_square = Some(target.try_into()?)
             }
-            // remove en passant sq
-            MoveType::EnPassant(captured) => {
-                self.squares[captured] = None;
-                self.en_passant_target_square = None;
+
+            MoveType::CastleKingSide => {
+                if self.active_colour == Colour::White {
+                    self.castling_rights.k_w = false;
+                } else {
+                    self.castling_rights.k_b = false;
+                }
             }
-            _ => {}
+            MoveType::CastleQueenSide => {
+                if self.active_colour == Colour::White {
+                    self.castling_rights.q_w = false;
+                } else {
+                    self.castling_rights.q_b = false;
+                }
+            }
+            _ => {
+                // not castling or en passant! yay!
+                // if rook moves it affects castling
+                if piece.piece_type == PieceType::Rook {
+                    if self.castling_rights.k_w == true {
+                        if i0 == 7 {
+                            self.castling_rights.k_w = false;
+                        }
+                    }
+                    if self.castling_rights.q_w == true {
+                        if i0 == 0 {
+                            self.castling_rights.q_w = false;
+                        }
+                    }
+                    if self.castling_rights.k_b == true {
+                        if i0 == 63 {
+                            self.castling_rights.k_b = false;
+                        }
+                    }
+                    if self.castling_rights.q_b == true {
+                        if i0 == 56 {
+                            self.castling_rights.q_b = false;
+                        }
+                    }
+                }
+                
+                // change colours!!
+                if piece.piece_type == PieceType::King {
+                    if self.active_colour == Colour::White {
+                        self.castling_rights.k_w = false;
+                        self.castling_rights.q_w = false;
+                    } else {
+                        self.castling_rights.k_b = false;
+                        self.castling_rights.q_b = false;
+                    }
+                    
+                }
+            }
         }
         // change active colour
         self.active_colour.change_colour();
@@ -162,6 +243,7 @@ impl Board {
             &mut legal_moves,
             i0,
             &self.en_passant_target_square,
+            Some(self.castling_rights.clone()),
         );
         // for (x, m) in &move_vec {
         //     //println!("[{}] {:?}", x, m);
