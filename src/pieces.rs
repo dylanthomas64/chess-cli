@@ -48,6 +48,22 @@ pub enum PieceType {
     Queen,
     King,
 }
+impl TryFrom<char> for PieceType {
+    type Error = BoardError;
+    fn try_from(c: char) -> Result<Self, BoardError> {
+        let piece_type = match &c.to_ascii_lowercase() {
+            'p' => PieceType::Pawn,
+            'b' => PieceType::Bishop,
+            'n' => PieceType::Knight,
+            'r' => PieceType::Rook,
+            'q' => PieceType::Queen,
+            'k' => PieceType::King,
+            _ => return Err(BoardError::PieceError),
+        };
+        Ok(piece_type)
+    }
+}
+
 #[derive(Clone, Debug, Copy)]
 pub struct Piece {
     pub piece_type: PieceType,

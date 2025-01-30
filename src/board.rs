@@ -70,12 +70,13 @@ enum GameState {
 }
 
 // contains board representation and all relevant information. Constructed from FEN string.
+#[derive(Clone)]
 pub struct Board {
     // where a1 == 0, a2 == 1, h8 == 63
     squares: Vec<Option<Piece>>,
-    active_colour: Colour,
-    castling_rights: CastlingRights,
-    en_passant_target_square: Option<Coordinate>,
+    pub active_colour: Colour,
+    pub castling_rights: CastlingRights,
+    pub en_passant_target_square: Option<Coordinate>,
     // required for 50 move rule
     half_move_clock: usize,
     // starts at 1 and increments after black's move
@@ -88,6 +89,10 @@ impl Board {
     }
     pub fn startpos() -> Board {
         Self::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap()
+    }
+    // getter
+    pub fn get_squares(&self) -> &[Option<Piece>] {
+        &self.squares
     }
 
     pub fn process_uci_move(&mut self, mv: &Move) -> Result<(), BoardError> {
@@ -203,7 +208,7 @@ impl Board {
                         }
                     }
                 }
-                
+
                 // change colours!!
                 if piece.piece_type == PieceType::King {
                     if self.active_colour == Colour::White {
@@ -213,7 +218,6 @@ impl Board {
                         self.castling_rights.k_b = false;
                         self.castling_rights.q_b = false;
                     }
-                    
                 }
             }
         }
@@ -225,7 +229,7 @@ impl Board {
         Ok(())
     }
     // check that move is legal
-    fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
+    pub fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
         // check piece is exists
         let piece = match &self.squares[i0] {
             Some(p) => p,

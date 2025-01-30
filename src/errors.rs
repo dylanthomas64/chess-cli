@@ -23,6 +23,9 @@ pub enum BoardError {
     InCheck,
     PgnCreation,
     UciError,
+
+    //pgn -> uci
+    NoQualifier,
 }
 
 impl From<ParseIntError> for BoardError {
@@ -49,6 +52,9 @@ impl Display for BoardError {
             Self::InCheck => "king must escape check!",
             Self::PgnCreation => "error reading pgn file",
             Self::UciError => "error uci",
+
+            // pgn to uci
+            Self::NoQualifier => "requires a qualifier!",
         };
         write!(f, "{}", error_msg)
     }
