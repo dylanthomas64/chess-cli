@@ -26,6 +26,7 @@ pub enum BoardError {
 
     //pgn -> uci
     NoQualifier,
+    BadQualifier,
 }
 
 impl From<ParseIntError> for BoardError {
@@ -55,6 +56,7 @@ impl Display for BoardError {
 
             // pgn to uci
             Self::NoQualifier => "requires a qualifier!",
+            Self::BadQualifier => "couldn't parse qualifier",
         };
         write!(f, "{}", error_msg)
     }

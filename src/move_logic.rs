@@ -109,6 +109,38 @@ pub fn find_legal_moves(
     }
 }
 
+
+
+pub fn find_legal_departure_squares(
+    squares: &[Option<Piece>],
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    index: usize,
+    piece: Piece
+) {
+
+    // create vec of legal moves to be passed around to each
+    //let mut move_vec: Vec<(usize, MoveType)> = vec![];
+    match piece.piece_type {
+        PieceType::Pawn => panic!(),
+        PieceType::Knight => {
+            get_knight_departure_moves(legal_moves, squares, index, piece.colour);
+        }
+        PieceType::Bishop => {
+            get_diagonal_departure_moves(legal_moves, squares, index, piece);
+        }
+        PieceType::Rook => {
+            get_perpendicular_departure_moves(legal_moves, squares, index, piece);
+        }
+        PieceType::Queen => {
+            get_queen_departure_moves(legal_moves, squares, index, piece);
+        }
+        PieceType::King => {
+            get_king_departure_moves(legal_moves, squares, index, &piece.colour);
+
+        }
+    }
+}
+
 // is given colour currently in check? ie. is it currently in view of / can be be attacked by on the next move
 pub fn in_check(this_colour: &Colour, squares: &[Option<Piece>]) -> bool {
     let opp_colour = match this_colour {
@@ -279,8 +311,7 @@ fn get_pawn_legal_moves(
     }
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+
 fn get_bishop_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
@@ -401,8 +432,122 @@ fn get_bishop_legal_moves(
     }
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+fn get_diagonal_departure_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    moved_piece: Piece,
+) {
+
+
+    let range = 0..64usize;
+
+    let mut target: usize;
+
+    // search up-right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            target = piece_index + (9 * x);
+            // not wrapped h->a file
+            if range.contains(&target) && target % 8 != 0 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece == moved_piece {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // down-right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            if let Some(target) = usize::checked_sub(piece_index + x, 8 * x) {
+                // not wrapped h->a file
+                if target % 8 != 0 {
+                    match squares[target] {
+                        // hit piece
+                        Some(piece) => {
+                            if piece == moved_piece {
+                                legal_moves.push((target, MoveType::Capture));
+                            }
+                            break;
+                        }
+                        None => {
+                        }
+                    }
+                } else {
+                    // out of range
+                    break;
+                }
+            }
+        }
+    }
+
+    // search up-left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            target = piece_index + (8 * x) - x;
+            // not wrapped a->h file
+            if range.contains(&target) && target % 8 != 7 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece == moved_piece {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // search down-left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            if let Some(target) = usize::checked_sub(piece_index, 9 * x) {
+                // not wrapped a->h file
+                if target % 8 != 7 {
+                    match squares[target] {
+                        // hit piece
+                        Some(piece) => {
+                            if piece == moved_piece {
+                                legal_moves.push((target, MoveType::Capture));
+                            }
+                            break;
+                        }
+                        None => {
+                        }
+                    }
+                } else {
+                    // out of range
+                    break;
+                }
+            }
+        }
+    }
+}
+
+
 fn get_knight_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
@@ -430,8 +575,29 @@ fn get_knight_legal_moves(
     }
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+fn get_knight_departure_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: Colour
+) {
+    let range = 0..64i8;
+    let k: [i8; 8] = [6, 10, 15, 17, -6, -10, -15, -17];
+
+    let mut target: i8;
+    for x in k {
+        target = piece_index as i8 + x;
+        if range.contains(&target) {
+            if let Some(p) = squares[target as usize] {
+                if p.colour == colour && p.piece_type == PieceType::Knight {
+                    legal_moves.push((target as usize, MoveType::Capture));
+                }
+            }
+        }
+    }
+}
+
+
 fn get_rook_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
@@ -538,8 +704,110 @@ fn get_rook_legal_moves(
     }
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+fn get_perpendicular_departure_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    moved_piece: Piece,
+) {
+
+    let range = 0..64usize;
+
+    let mut target: usize;
+
+    // search up
+    for x in 1..8usize {
+        target = piece_index + (8 * x);
+        if range.contains(&target) {
+            match squares[target] {
+                // hit piece
+                Some(piece) => {
+                    if piece == moved_piece {
+                        legal_moves.push((target, MoveType::Capture));
+                    }
+                    break;
+                }
+                None => {
+                }
+            }
+        } else {
+            // out of range
+            break;
+        }
+    }
+
+    // search down
+    for x in 1..8usize {
+        if let Some(target) = usize::checked_sub(piece_index, 8 * x) {
+            match squares[target] {
+                // hit piece
+                Some(piece) => {
+                    if piece == moved_piece {
+                        legal_moves.push((target, MoveType::Capture));
+                    }
+                    break;
+                }
+                None => {
+
+                }
+            }
+        }
+    }
+
+    // search right
+    // not on h file
+    if piece_index % 8 != 7 {
+        for x in 1..8usize {
+            target = piece_index + x;
+            // not wrapped from h->a file
+            if target % 8 != 0 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece == moved_piece {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+
+    // search left
+    // not on a file
+    if piece_index % 8 != 0 {
+        for x in 1..8usize {
+            let target = piece_index - x;
+            // not wrapped from a->h file
+            if target % 8 != 7 {
+                match squares[target] {
+                    // hit piece
+                    Some(piece) => {
+                        if piece == moved_piece {
+                            legal_moves.push((target, MoveType::Capture));
+                        }
+                        break;
+                    }
+                    None => {
+
+                    }
+                }
+            } else {
+                // out of range
+                break;
+            }
+        }
+    }
+}
+
+
 fn get_queen_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
@@ -550,8 +818,17 @@ fn get_queen_legal_moves(
     get_rook_legal_moves(legal_moves, squares, piece_index, colour);
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+fn get_queen_departure_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    moved_piece: Piece,
+) {
+    get_diagonal_departure_moves(legal_moves, squares, piece_index, moved_piece);
+    get_perpendicular_departure_moves(legal_moves, squares, piece_index, moved_piece);
+}
+
+
 fn get_king_legal_moves(
     legal_moves: &mut Vec<(usize, MoveType)>,
     squares: &[Option<Piece>],
@@ -609,6 +886,33 @@ fn get_king_legal_moves(
                     && squares[piece_index - 3].is_none()
                 {
                     legal_moves.push((piece_index - 2, MoveType::CastleQueenSide))
+                }
+            }
+        }
+    }
+}
+
+fn get_king_departure_moves(
+    legal_moves: &mut Vec<(usize, MoveType)>,
+    squares: &[Option<Piece>],
+    piece_index: usize,
+    colour: &Colour,
+) {
+    let range = 0..64i8;
+    let k: [i8; 8] = [7, 8, 9, 1, -7, -8, -9, -1];
+    let mut target: i8;
+    for x in k {
+        target = piece_index as i8 + x;
+        if range.contains(&target) {
+            match squares[target as usize] {
+                
+                Some(piece) => {
+                    if &piece.colour == colour && piece.piece_type == PieceType::King{
+                        
+                        legal_moves.push((target as usize, MoveType::Capture));
+                    }
+                }
+                None => {
                 }
             }
         }

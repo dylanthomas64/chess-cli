@@ -8,7 +8,7 @@ use clap::builder::styling::Color;
 use crate::board::{self, Board};
 use crate::coordinate::Coordinate;
 use crate::errors::BoardError;
-use crate::move_logic::{find_legal_moves, Move, MoveType};
+use crate::move_logic::{find_legal_departure_squares, find_legal_moves, Move, MoveType};
 use crate::pieces::{Colour, Piece, PieceType};
 
 #[derive(Debug, PartialEq)]
@@ -128,10 +128,12 @@ pub fn parse_pgn(input: &str) -> Result<PgnGame, PgnError> {
 
 // converts san to uci moves by validating them on a board
 // this function is very ugly and should be remade
-fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
+
+pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
     let mut board = board::Board::startpos();
     let mut uci_moves: Vec<Move> = Vec::new();
     for san in input {
+        println!("{}", san);
         if let Some(c) = san.castling {
             let (i0, i): (usize, usize) = match c {
                 Castling::KingSide => {
@@ -150,28 +152,31 @@ fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                     }
                 }
             };
-            board::Board::validate_move(&board, i0, i)?;
-            // OK. add uci move
-            uci_moves.push(Move {
+            let uci_move = Move {
                 from: Coordinate::try_from(i0)?,
                 destination: Coordinate::try_from(i)?,
                 promotion: None,
-            });
+            };
+            board.process_uci_move(&uci_move)?;
+            uci_moves.push(uci_move);
         } else if let Some(piece_coord) = san.destination {
             let i: usize = piece_coord.into();
-            // if no qualfier then must be a pawn move
-            let i0 = if san.qualifier.is_none() {
-                let i0: usize;
-
-                // if no capture must be push
-                if !san.capture {
-                    // check push and double pushes
-                    if board.active_colour == Colour::White {
-                        // check for pawn below
-                        if let Some(p) = board.get_squares()[i - 8] {
-                            if p.piece_type == PieceType::Pawn && p.colour == board.active_colour {
-                                // OK regular pawn push
-                                i - 8
+            let i0 = match san.piece {
+                PieceType::Pawn => {
+                    // if no capture must be push
+                    if !san.capture {
+                        // check push and double pushes
+                        if board.active_colour == Colour::White {
+                            // check for pawn below
+                            if let Some(p) = board.get_squares()[i - 8] {
+                                if p.piece_type == PieceType::Pawn
+                                    && p.colour == board.active_colour
+                                {
+                                    // OK regular pawn push
+                                    i - 8
+                                } else {
+                                    return Err(BoardError::InvalidMove);
+                                }
                             } else if let Some(p) = board.get_squares()[i - 16] {
                                 if p.piece_type == PieceType::Pawn
                                     && p.colour == board.active_colour
@@ -180,22 +185,23 @@ fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     i - 16
                                 } else {
                                     // no valid pawn moves
-                                    panic!()
+                                    return Err(BoardError::InvalidMove);
                                 }
                             } else {
                                 // no valid pawn moves
-                                panic!()
+                                return Err(BoardError::InvalidMove);
                             }
                         } else {
-                            // square below is occupied
-                            panic!()
-                        }
-                    } else {
-                        // check for pawn above
-                        if let Some(p) = board.get_squares()[i + 8] {
-                            if p.piece_type == PieceType::Pawn && p.colour == board.active_colour {
-                                // OK regular pawn push
-                                i + 8
+                            // check for pawn above
+                            if let Some(p) = board.get_squares()[i + 8] {
+                                if p.piece_type == PieceType::Pawn
+                                    && p.colour == board.active_colour
+                                {
+                                    // OK regular pawn push
+                                    i + 8
+                                } else {
+                                    return Err(BoardError::InvalidMove);
+                                }
                             } else if let Some(p) = board.get_squares()[i + 16] {
                                 if p.piece_type == PieceType::Pawn
                                     && p.colour == board.active_colour
@@ -204,106 +210,199 @@ fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     i + 16
                                 } else {
                                     // no valid pawn moves
-                                    panic!()
+                                    return Err(BoardError::InvalidMove);
                                 }
                             } else {
                                 // no valid pawn moves
-                                panic!()
+                                return Err(BoardError::InvalidMove);
                             }
-                        } else {
-                            // square below is occupied
-                            panic!()
+                        }
+                    } else {
+                        // pawn capture
+                        // check diagonals below
+                        match board.active_colour {
+                            Colour::White => {
+                                // below left
+                                let mut possible_from: Vec<Coordinate> = Vec::new();
+                                if let Some(p) = board.get_squares()[i - 9] {
+                                    if p.piece_type == PieceType::Pawn
+                                        && p.colour == board.active_colour
+                                    {
+                                        // pawn below left
+                                        // necessary validation for possible edge of board wrapping
+                                        if board::Board::validate_move(&board, i - 9, i).is_ok() {
+                                            possible_from.push((i - 9).try_into()?);
+                                        };
+                                    }
+                                }
+                                // below right
+                                if let Some(p) = board.get_squares()[i - 7] {
+                                    if p.piece_type == PieceType::Pawn
+                                        && p.colour == board.active_colour
+                                    {
+                                        // pawn below left
+                                        if board::Board::validate_move(&board, i - 7, i).is_ok() {
+                                            possible_from.push((i - 7).try_into()?);
+                                        };
+                                    }
+                                }
+                                if possible_from.len() == 1 {
+                                    possible_from.pop().unwrap().into()
+                                } else if possible_from.is_empty() {
+                                    return Err(BoardError::InvalidMove);
+                                } else {
+                                    // apply qualifiers
+                                    //let mut it = possible_from.iter();
+                                    if let Some(fq) = san.file_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| c.file == fq)
+                                            .collect();
+                                    } else if let Some(rq) = san.rank_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| {
+                                                c.rank == rq.to_digit(10).unwrap() as usize
+                                            })
+                                            .collect();
+                                    } else if let Some(coord) = san.coord_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| c == coord)
+                                            .collect();
+                                    }
+
+                                    if possible_from.len() == 1 {
+                                        possible_from.pop().unwrap().into()
+                                    } else {
+                                        return Err(BoardError::BadQualifier);
+                                    }
+                                }
+                            }
+
+                            Colour::Black => {
+                                // above left
+                                let mut possible_from: Vec<Coordinate> = Vec::new();
+                                if let Some(p) = board.get_squares()[i + 7] {
+                                    if p.piece_type == PieceType::Pawn
+                                        && p.colour == board.active_colour
+                                    {
+                                        // pawn below left
+                                        // necessary validation for possible edge of board wrapping
+                                        if board::Board::validate_move(&board, i + 7, i).is_ok() {
+                                            possible_from.push((i + 7).try_into()?);
+                                        };
+                                    }
+                                }
+                                // below right
+                                if let Some(p) = board.get_squares()[i + 9] {
+                                    if p.piece_type == PieceType::Pawn
+                                        && p.colour == board.active_colour
+                                    {
+                                        // pawn below left
+                                        if board::Board::validate_move(&board, i + 9, i).is_ok() {
+                                            possible_from.push((i + 9).try_into()?);
+                                        };
+                                    }
+                                }
+
+                                if possible_from.len() == 1 {
+                                    possible_from.pop().unwrap().into()
+                                } else if possible_from.is_empty() {
+                                    return Err(BoardError::InvalidMove);
+                                } else {
+                                    // apply qualifiers
+                                    //let mut it = possible_from.iter();
+                                    if let Some(fq) = san.file_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| c.file == fq)
+                                            .collect();
+                                    } else if let Some(rq) = san.rank_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| {
+                                                c.rank == rq.to_digit(10).unwrap() as usize
+                                            })
+                                            .collect();
+                                    } else if let Some(coord) = san.coord_qual {
+                                        possible_from = possible_from
+                                            .into_iter()
+                                            .filter(|&c| c == coord)
+                                            .collect();
+                                    }
+
+                                    if possible_from.len() == 1 {
+                                        possible_from.pop().unwrap().into()
+                                    } else {
+                                        return Err(BoardError::BadQualifier);
+                                    }
+                                }
+                            }
                         }
                     }
-                } else {
-                    // capture with no qualifier must be pawn capture from only one possible square
-                    // check diagonals below
-                    match board.active_colour {
-                        Colour::White => {
-                            // below left
-                            let mut possible_from: Vec<usize> = Vec::new();
-                            if let Some(p) = board.get_squares()[i - 9] {
-                                if p.piece_type == PieceType::Pawn
-                                    && p.colour == board.active_colour
-                                {
-                                    // pawn below left
-                                    // necessary validation for possible edge of board wrapping
-                                    board::Board::validate_move(&board, i - 9, i)?;
-                                    possible_from.push(i - 9);
-                                }
-                            }
-                            // below right
-                            if let Some(p) = board.get_squares()[i - 7] {
-                                if p.piece_type == PieceType::Pawn
-                                    && p.colour == board.active_colour
-                                {
-                                    // pawn below left
-                                    board::Board::validate_move(&board, i - 7, i)?;
-                                    possible_from.push(i - 7);
-                                }
-                            }
-                            if possible_from.len() == 1 {
-                                possible_from.pop().unwrap()
-                            } else if possible_from.is_empty() {
-                                return Err(BoardError::InvalidMove);
-                            } else {
-                                return Err(BoardError::NoQualifier);
-                            }
+                } // not a pawn, all other moves
+                // does not work for pawns or castling because of different move directions and rules. ie/ all other pieces can return to where they came from
+                _ => {
+                    // find all legal moves from/to position
+                    let mut legal_moves: Vec<(usize, MoveType)> = Vec::new();
+                    println!("!!!");
+                    find_legal_departure_squares(
+                        board.get_squares(),
+                        &mut legal_moves,
+                        i,
+                        Piece {piece_type: san.piece, colour: board.active_colour}
+                    );
+
+                    // convert legal moves to coords for qualifier checking
+                    let mut possible_from: Vec<Coordinate> = legal_moves
+                        .into_iter()
+                        .map(|(i, _)| i.try_into().unwrap())
+                        .collect();
+                    
+                    if possible_from.len() == 1 {
+                        possible_from[0].into()
+                    } else if possible_from.is_empty() {
+                        return Err(BoardError::InvalidMove);
+                    } else {
+                        // apply qualifiers
+                        //let mut it = possible_from.iter();
+                        if let Some(fq) = san.file_qual {
+                            possible_from = possible_from
+                                .into_iter()
+                                .filter(|&c| c.file == fq)
+                                .collect();
+                        } else if let Some(rq) = san.rank_qual {
+                            possible_from = possible_from
+                                .into_iter()
+                                .filter(|&c| c.rank == rq.to_digit(10).unwrap() as usize)
+                                .collect();
+                        } else if let Some(coord) = san.coord_qual {
+                            possible_from =
+                                possible_from.into_iter().filter(|&c| c == coord).collect();
                         }
 
-                        Colour::Black => {
-                            // above left
-                            let mut possible_from: Vec<usize> = Vec::new();
-                            if let Some(p) = board.get_squares()[i + 7] {
-                                if p.piece_type == PieceType::Pawn
-                                    && p.colour == board.active_colour
-                                {
-                                    // pawn below left
-                                    // necessary validation for possible edge of board wrapping
-                                    board::Board::validate_move(&board, i + 7, i)?;
-                                    possible_from.push(i + 7);
-                                }
-                            }
-                            // below right
-                            if let Some(p) = board.get_squares()[i + 9] {
-                                if p.piece_type == PieceType::Pawn
-                                    && p.colour == board.active_colour
-                                {
-                                    // pawn below left
-                                    board::Board::validate_move(&board, i + 9, i)?;
-                                    possible_from.push(i + 9);
-                                }
-                            }
-                            if possible_from.len() == 1 {
-                                possible_from.pop().unwrap()
-                            } else if possible_from.is_empty() {
-                                return Err(BoardError::InvalidMove);
-                            } else {
-                                return Err(BoardError::NoQualifier);
-                            }
+                        if possible_from.len() == 1 {
+                            possible_from[0].into()
+                        } else {
+                            println!("{:?}", possible_from);
+                            return Err(BoardError::BadQualifier);
                         }
                     }
                 }
-            } else {
-                // qualifier exists
-
-                let mut legal_moves: Vec<(usize, MoveType)> = Vec::new();
-                // currenly just cloning...
-                // does not work for pawns or castling because of different move directions and rules. ie/ all other pieces can return to where they came from
-                find_legal_moves(
-                    board.get_squares(),
-                    &mut legal_moves,
-                    i,
-                    &board.en_passant_target_square,
-                    Some(board.castling_rights.clone()),
-                );
-                // look for
-                todo!()
             };
 
-            // find all legal moves FROM destination. if one ok, if more then use qualifier
+            let uci_move = Move {
+                from: i0.try_into()?,
+                destination: san.destination.unwrap(),
+                promotion: san.promotion,
+            };
+            println!("{}\n", uci_move);
+            board.process_uci_move(&uci_move)?;
+            uci_moves.push(uci_move)
         }
     }
+
     Ok(uci_moves)
 }
 
@@ -312,10 +411,14 @@ fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
 #[derive(Debug)]
 pub struct SanMove {
     pub destination: Option<Coordinate>,
-    pub piece_qualifier: PieceType,
-    pub qualifier: Option<String>,
+    // qualifiers
+    pub piece: PieceType,
+    pub file_qual: Option<char>,
+    pub rank_qual: Option<char>,
+    pub coord_qual: Option<Coordinate>,
+    // status
     pub capture: bool,
-    pub promotion: Option<String>,
+    pub promotion: Option<PieceType>,
     pub castling: Option<Castling>,
     pub check: bool,
     pub checkmate: bool,
@@ -324,8 +427,10 @@ pub struct SanMove {
 impl Display for SanMove {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "dest: {:?}", self.destination)?;
-        writeln!(f, "type: {:?}", self.piece_qualifier)?;
-        writeln!(f, "qual: {:?}", self.qualifier)?;
+        writeln!(f, "piece: {:?}", self.piece)?;
+        writeln!(f, "file: {:?}", self.file_qual)?;
+        writeln!(f, "rank: {:?}", self.rank_qual)?;
+        writeln!(f, "coord: {:?}", self.coord_qual)?;
         writeln!(f, "capt: {:?}", self.capture)?;
         writeln!(f, "promotion: {:?}", self.promotion)?;
         writeln!(f, "castling: {:?}", self.castling)
@@ -340,18 +445,21 @@ enum Castling {
     KingSide,
 }
 
-// God this is awful
+// God this is awful !!
 // parses pgn.moves into valid uci moves by playing out the game on a temporary board
 // start position is startpos unless a fen header exists
-pub fn pgn_to_san_moves(input: Vec<String>) -> Vec<SanMove> {
-    let board = Board::startpos();
+pub fn pgn_to_san_moves(input: Vec<String>) -> Result<Vec<SanMove>, BoardError> {
     let mut san_moves: Vec<SanMove> = Vec::new();
     for mut san in input {
         let mut destination: Option<Coordinate> = None;
-        let mut piece_qualifier: PieceType = PieceType::Pawn;
-        let mut qualifier: Option<String> = None;
+        // qualifiers
+        let mut piece: PieceType = PieceType::Pawn;
+        let mut file_qual: Option<char> = None;
+        let mut rank_qual: Option<char> = None;
+        let mut coord_qual: Option<Coordinate> = None;
+        //
         let mut capture: bool = false;
-        let mut promotion: Option<String> = None;
+        let mut promotion: Option<PieceType> = None;
         let mut castling: Option<Castling> = None;
         let mut check: bool = false;
         let mut checkmate: bool = false;
@@ -368,20 +476,21 @@ pub fn pgn_to_san_moves(input: Vec<String>) -> Vec<SanMove> {
 
         // checks for promotion
         if let Some(i) = san.chars().position(|x| x == '=') {
-            promotion = Some(san[i + 1..].to_string());
+            let promotion_str = san[i + 1..].to_string();
+            promotion = Some(promotion_str.chars().next().unwrap().try_into()?);
             san.truncate(i);
         }
         // kingside castling
         if san == "O-O" || san == "0-0" {
             castling = Some(Castling::KingSide);
             san.clear();
-            piece_qualifier = PieceType::King;
+            piece = PieceType::King;
         }
         // queenside castling
         else if san == "O-O-O" || san == "0-0-0" {
             castling = Some(Castling::QueenSide);
             san.clear();
-            piece_qualifier = PieceType::King;
+            piece = PieceType::King;
         } else {
             // san stripped of +#=
             let mut chars = san.chars().rev();
@@ -395,28 +504,60 @@ pub fn pgn_to_san_moves(input: Vec<String>) -> Vec<SanMove> {
             // check captures and qualifiers
 
             if !san.is_empty() {
+                /*
+                (type)[(file)(rank)(coord)](x)
+                if x strip suffix and caprue = true
+                iter over chars
+                if first is uppercase. remove and push piece qual
+                [(file)(rank)(coord)]
+                if is of size 1 = try for file, try for rank, else error
+                else //must be a coord qual
+                try for coord
+                 */
+                if san.ends_with("x") {
+                    capture = true;
+                    san = san.strip_suffix("x").unwrap().to_string()
+                }
+
                 let mut chars = san.chars().peekable();
                 let c = chars.peek().unwrap();
+                // if a piece qualifier
                 if c.is_ascii_uppercase() {
-                    piece_qualifier = PieceType::try_from(chars.next().unwrap()).unwrap();
+                    piece = PieceType::try_from(chars.next().unwrap()).unwrap();
                 }
-                let mut other_qualifiers = Some(chars.collect::<String>()).unwrap();
-                if other_qualifiers.ends_with("x") {
-                    capture = true;
-                    other_qualifiers = other_qualifiers.strip_suffix("x").unwrap().to_string()
-                }
-                qualifier = if other_qualifiers.is_empty() {
-                    None
-                } else {
-                    Some(other_qualifiers)
+                let other_qualifiers = Some(chars.collect::<String>()).unwrap();
+                if !other_qualifiers.is_empty() {
+                    if other_qualifiers.len() == 1 {
+                        let c = other_qualifiers.chars().next().unwrap();
+                        if ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].contains(&c) {
+                            file_qual = Some(c);
+                        } else if ['1', '2', '3', '4', '5', '6', '7', '8'].contains(&c) {
+                            rank_qual = Some(c);
+                        } else {
+                            println!("{}", c);
+                            return Err(BoardError::BadQualifier);
+                        }
+                    } else if other_qualifiers.len() == 2 {
+                        //coord
+                        if let Ok(coord) = other_qualifiers.parse() {
+                            coord_qual = Some(coord);
+                        } else {
+                            println!("{}", other_qualifiers);
+                            return Err(BoardError::BadQualifier);
+                        }
+                    } else {
+                        return Err(BoardError::BadQualifier);
+                    }
                 }
             }
         }
 
         san_moves.push(SanMove {
             destination,
-            piece_qualifier,
-            qualifier,
+            piece,
+            file_qual,
+            rank_qual,
+            coord_qual,
             capture,
             promotion,
             castling,
@@ -424,7 +565,7 @@ pub fn pgn_to_san_moves(input: Vec<String>) -> Vec<SanMove> {
             checkmate,
         });
     }
-    san_moves
+    Ok(san_moves)
 }
 
 #[cfg(test)]

@@ -64,7 +64,7 @@ impl TryFrom<char> for PieceType {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub struct Piece {
     pub piece_type: PieceType,
     pub colour: Colour,
