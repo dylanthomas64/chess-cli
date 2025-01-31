@@ -88,6 +88,7 @@ pub fn parse_pgn(input: &str) -> Result<PgnGame, PgnError> {
                             nag.push(c);
                         }
                         println!("found NAG! {}", nag);
+                        
                     }
                     _ if c.is_whitespace() => continue,
                     _ => {
@@ -95,15 +96,37 @@ pub fn parse_pgn(input: &str) -> Result<PgnGame, PgnError> {
                         let mut token = String::new();
                         token.push(c);
                         while let Some(&c) = chars.peek() {
-                            if c.is_whitespace() || c == '{' || c == ';' {
+                            if c.is_whitespace() || c == '{' || c == ';'{
                                 break;
                             }
                             token.push(chars.next().unwrap());
                         }
+
+                        // strip move number if attatched to token
+                        let mut buf: String = String::new();
+                        for c in token.chars() {
+                            buf.push(c);
+                            // if hit a '.' reset
+                            if c == '.' {
+                                buf.clear()
+                            }
+                        }
+                        if !buf.is_empty() {
+                            token = buf;
+                        }
+
+                        // could be e4e5, 4.Bxf6+Kxf6
+                        // currently doesn't allow concatenated moves
+                        
+                        
+
+                        // remove token if it is a move number
                         if token.ends_with('.') {
                             // Skip move numbers (e.g., "1.", "2.")
                             continue;
                         }
+
+
                         if token == "1-0" || token == "0-1" || token == "1/2-1/2" {
                             // Skip game result
                             continue;
@@ -141,14 +164,14 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                     if board.active_colour == Colour::White {
                         (4, 6)
                     } else {
-                        (59, 57)
+                        (60, 62)
                     }
                 }
                 Castling::QueenSide => {
                     if board.active_colour == Colour::White {
                         (4, 1)
                     } else {
-                        (59, 62)
+                        (60, 57)
                     }
                 }
             };
@@ -157,7 +180,9 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                 destination: Coordinate::try_from(i)?,
                 promotion: None,
             };
+            println!("processing...{:?}", uci_move);
             board.process_uci_move(&uci_move)?;
+            println!("ok!");
             uci_moves.push(uci_move);
         } else if let Some(piece_coord) = san.destination {
             let i: usize = piece_coord.into();
@@ -175,7 +200,7 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     // OK regular pawn push
                                     i - 8
                                 } else {
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));
                                 }
                             } else if let Some(p) = board.get_squares()[i - 16] {
                                 if p.piece_type == PieceType::Pawn
@@ -185,11 +210,11 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     i - 16
                                 } else {
                                     // no valid pawn moves
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));
                                 }
                             } else {
                                 // no valid pawn moves
-                                return Err(BoardError::InvalidMove);
+                                return Err(BoardError::InvalidMove(format!("{:?}", san)));
                             }
                         } else {
                             // check for pawn above
@@ -200,7 +225,7 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     // OK regular pawn push
                                     i + 8
                                 } else {
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));
                                 }
                             } else if let Some(p) = board.get_squares()[i + 16] {
                                 if p.piece_type == PieceType::Pawn
@@ -210,11 +235,11 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                     i + 16
                                 } else {
                                     // no valid pawn moves
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));;
                                 }
                             } else {
                                 // no valid pawn moves
-                                return Err(BoardError::InvalidMove);
+                                return Err(BoardError::InvalidMove(format!("{:?}", san)));
                             }
                         }
                     } else {
@@ -249,7 +274,7 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                 if possible_from.len() == 1 {
                                     possible_from.pop().unwrap().into()
                                 } else if possible_from.is_empty() {
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));
                                 } else {
                                     // apply qualifiers
                                     //let mut it = possible_from.iter();
@@ -309,7 +334,7 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                                 if possible_from.len() == 1 {
                                     possible_from.pop().unwrap().into()
                                 } else if possible_from.is_empty() {
-                                    return Err(BoardError::InvalidMove);
+                                    return Err(BoardError::InvalidMove(format!("{:?}", san)));
                                 } else {
                                     // apply qualifiers
                                     //let mut it = possible_from.iter();
@@ -346,7 +371,6 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                 _ => {
                     // find all legal moves from/to position
                     let mut legal_moves: Vec<(usize, MoveType)> = Vec::new();
-                    println!("!!!");
                     find_legal_departure_squares(
                         board.get_squares(),
                         &mut legal_moves,
@@ -363,7 +387,7 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                     if possible_from.len() == 1 {
                         possible_from[0].into()
                     } else if possible_from.is_empty() {
-                        return Err(BoardError::InvalidMove);
+                        return Err(BoardError::InvalidMove(format!("{:?}", san)));
                     } else {
                         // apply qualifiers
                         //let mut it = possible_from.iter();
@@ -385,7 +409,6 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                         if possible_from.len() == 1 {
                             possible_from[0].into()
                         } else {
-                            println!("{:?}", possible_from);
                             return Err(BoardError::BadQualifier);
                         }
                     }
@@ -397,7 +420,6 @@ pub fn san_to_uci(input: Vec<SanMove>) -> Result<Vec<Move>, BoardError> {
                 destination: san.destination.unwrap(),
                 promotion: san.promotion,
             };
-            println!("{}\n", uci_move);
             board.process_uci_move(&uci_move)?;
             uci_moves.push(uci_move)
         }
@@ -534,7 +556,6 @@ pub fn pgn_to_san_moves(input: Vec<String>) -> Result<Vec<SanMove>, BoardError> 
                         } else if ['1', '2', '3', '4', '5', '6', '7', '8'].contains(&c) {
                             rank_qual = Some(c);
                         } else {
-                            println!("{}", c);
                             return Err(BoardError::BadQualifier);
                         }
                     } else if other_qualifiers.len() == 2 {
@@ -542,7 +563,6 @@ pub fn pgn_to_san_moves(input: Vec<String>) -> Result<Vec<SanMove>, BoardError> 
                         if let Ok(coord) = other_qualifiers.parse() {
                             coord_qual = Some(coord);
                         } else {
-                            println!("{}", other_qualifiers);
                             return Err(BoardError::BadQualifier);
                         }
                     } else {

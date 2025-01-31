@@ -100,6 +100,7 @@ impl Board {
         let i: usize = mv.destination.into();
         // causes error if no legal moves exist
         let move_type = Self::validate_move(self, i0, i)?;
+        
 
         // get Piece to move (only imported for promotions)
         let piece = match move_type {
@@ -230,6 +231,7 @@ impl Board {
     }
     // check that move is legal
     pub fn validate_move(&self, i0: usize, i: usize) -> Result<MoveType, BoardError> {
+        
         // check piece is exists
         let piece = match &self.squares[i0] {
             Some(p) => p,
@@ -241,6 +243,7 @@ impl Board {
         }
         // OK! find all legal moves from squares[i0]
         let mut legal_moves: Vec<(usize, MoveType)> = vec![];
+        println!("{:?}: {}->{}", piece, i0, i);
 
         move_logic::find_legal_moves(
             &self.squares,
@@ -255,7 +258,7 @@ impl Board {
         // check if index is in vec of legal moves
         match legal_moves.into_iter().find(|(x, _)| *x == i) {
             Some((_, m)) => Ok(m),
-            None => Err(BoardError::InvalidMove),
+            None => Err(BoardError::InvalidMove(format!("{}->{}", Coordinate::try_from(i0)?, Coordinate::try_from(i0)?))),
         }
     }
 

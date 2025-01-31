@@ -13,8 +13,9 @@ use move_logic::Move;
 use pgn::{parse_pgn, pgn_to_san_moves, san_to_uci, PgnGame};
 
 fn main() {
-    let pgn_str = pgn();
+    let pgn_str = &pgn()[0];
     let pgn = parse_pgn(&pgn_str).unwrap();
+    println!("PGN: {:?}", pgn);
     let san_moves = pgn_to_san_moves(pgn.moves.clone()).unwrap();
     let uci_moves = san_to_uci(san_moves).unwrap();
 
@@ -46,8 +47,12 @@ fn run(uci_moves: Vec<Move>) -> Result<(), BoardError> {
     Ok(())
 }
 
-fn pgn() -> String {
+fn pgn() -> Vec<String> {
+    let mut output = Vec::new();
     let mut entry = fs::read_dir("pgn").expect("error opening pgn directory");
     let file_name = entry.next().unwrap().unwrap().path();
-    fs::read_to_string(file_name).expect("error opening file")
+    output.push(fs::read_to_string(file_name).expect("error opening file"));
+    let file_name = entry.next().unwrap().unwrap().path();
+    output.push(fs::read_to_string(file_name).expect("error opening file"));
+    output
 }

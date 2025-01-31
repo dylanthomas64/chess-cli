@@ -16,7 +16,7 @@ pub enum BoardError {
     MoveError,
     PromotionError,
     // logic errors
-    InvalidMove,
+    InvalidMove(String),
     NoLegalMoves,
     WrongColour,
     EmptySquare,
@@ -46,7 +46,7 @@ impl Display for BoardError {
             Self::MoveError => "error creating move",
             Self::PromotionError => "error trying to promote",
             // logic
-            Self::InvalidMove => "error invalid move",
+            Self::InvalidMove(s) => &format!("invalid: {}", s),
             Self::NoLegalMoves => "no possible legal moves from start square",
             Self::WrongColour => "can't move opponents piece!",
             Self::EmptySquare => "start square is empty",
